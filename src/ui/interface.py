@@ -238,6 +238,155 @@ def update_button_states():
 # Use themes from constants
 THEMES = AVAILABLE_THEMES
 
+def create_header():
+    """Create the header section of the interface."""
+    with gr.Row():
+        gr.Markdown(
+            f"""
+            # {UI_TEXT["app_title"]}
+            {UI_TEXT["app_subtitle"]}
+            """,
+            elem_classes=["header-text"],
+        )
+
+
+def create_meeting_list():
+    """Create the meeting list panel."""
+    with gr.Row(elem_classes=["meeting-row"]):
+        with gr.Column(scale=1, elem_classes=["meeting-panel"]):
+            gr.Markdown(UI_TEXT["meeting_list_title"])
+            meeting_list = gr.Dataframe(
+                headers=TABLE_HEADERS["meeting_list"],
+                datatype=["str", "str", "str"],
+                value=load_meetings_data(),
+                interactive=True
+            )
+            return meeting_list
+
+
+def create_dialog_panel():
+    """Create the dialog panel with meeting fields and chatbot."""
+    with gr.Column(scale=4, elem_classes=["dialog-panel"]):
+        gr.Markdown(UI_TEXT["live_dialog_title"])
+        
+        # Meeting fields
+        with gr.Row():
+            meeting_name_field = gr.Textbox(
+                label=FORM_LABELS["meeting_name"],
+                placeholder=PLACEHOLDER_TEXT["meeting_name"],
+                value=""
+            )
+            duration_field = gr.Textbox(
+                label=FORM_LABELS["duration"],
+                value=DEFAULT_VALUES["duration_display"],
+                interactive=False
+            )
+        
+        dialog_output = gr.Chatbot(
+            value=[],  # Start with empty dialog
+            type="messages",
+            show_label=False,
+            placeholder=PLACEHOLDER_TEXT["transcription_dialog"],
+            height=UI_DIMENSIONS["dialog_height"]  # Set chatbot height
+        )
+        
+        return meeting_name_field, duration_field, dialog_output
+
+
+def get_device_choices_and_default():
+    """Get current audio device choices and default selection."""
+    try:
+        devices = get_audio_devices(refresh=True)
+        if not devices:
+            return [(DEFAULT_VALUES["no_devices"], -1)], DEFAULT_VALUES["no_devices"]
+        
+        device_index = get_default_device_index()
+        default_device = None
+        
+        # Find default device in the list
+        for display_name, index in devices:
+            if index == device_index:
+                default_device = display_name
+                break
+        
+        # If default not found, use first device
+        if default_device is None:
+            default_device = devices[0][0]
+        
+        return devices, default_device
+    except Exception as e:
+        error_choice = [(f"Error: {str(e)}", -1)]
+        return error_choice, error_choice[0][0]
+
+
+def create_controls():
+    """Create the audio controls panel."""
+    
+    with gr.Column(scale=2, elem_classes=["control-panel"]):
+        gr.Markdown(UI_TEXT["audio_controls_title"])
+        
+        # Audio device selection
+        device_choices, initial_device = get_device_choices_and_default()
+        
+        device_dropdown = gr.Dropdown(
+            label=FORM_LABELS["audio_device"],
+            choices=device_choices,
+            value=initial_device,
+            interactive=True,
+            allow_custom_value=True
+        )
+        
+        # Device refresh button
+        refresh_btn = gr.Button(
+            BUTTON_TEXT["refresh_devices"], 
+            size="sm",
+            variant="secondary"
+        )
+        
+        # Recording status
+        status_text = gr.Textbox(
+            label=FORM_LABELS["status"],
+            value=status_manager.get_status_message(),
+            interactive=False
+        )
+        
+        # Control buttons - Initialize with proper states
+        current_status = status_manager.current_status
+        logger.info(f"🔍 Current status: {current_status}")
+        initial_button_states = get_button_states(current_status)
+        logger.info(f"🔍 Start button interactive: {initial_button_states['start_btn']['interactive']}")
+        
+        with gr.Row():
+            start_btn = gr.Button(
+                initial_button_states["start_btn"]["text"],
+                variant=initial_button_states["start_btn"]["variant"],
+                interactive=True  # Force interactive for debugging
+            )
+            stop_btn = gr.Button(
+                initial_button_states["stop_btn"]["text"],
+                variant=initial_button_states["stop_btn"]["variant"],
+                interactive=initial_button_states["stop_btn"]["interactive"]
+            )
+        
+        # Save meeting button
+        save_meeting_btn = gr.Button(
+            initial_button_states["save_btn"]["text"],
+            variant=initial_button_states["save_btn"]["variant"],
+            interactive=initial_button_states["save_btn"]["interactive"]
+        )
+        
+        # Live transcription display
+        live_text = gr.Textbox(
+            label=FORM_LABELS["live_transcription"],
+            lines=10,
+            max_lines=15,
+            interactive=False,
+            placeholder=PLACEHOLDER_TEXT["live_transcription"]
+        )
+        
+        return device_dropdown, refresh_btn, status_text, start_btn, stop_btn, save_meeting_btn, live_text
+
+
 def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
     """Create the main Gradio interface.
     
@@ -250,32 +399,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
     # Get theme
     theme = THEMES.get(theme_name, THEMES[DEFAULT_THEME])
     
-    # Initialize audio devices
-    def get_device_choices_and_default():
-        """Get current audio device choices and default selection."""
-        try:
-            devices = get_audio_devices(refresh=True)
-            if not devices:
-                return [(DEFAULT_VALUES["no_devices"], -1)], DEFAULT_VALUES["no_devices"]
-            
-            device_index = get_default_device_index()
-            default_device = None
-            
-            # Find default device in the list
-            for display_name, index in devices:
-                if index == device_index:
-                    default_device = display_name
-                    break
-            
-            # If default not found, use first device
-            if default_device is None:
-                default_device = devices[0][0]
-            
-            return devices, default_device
-        except Exception as e:
-            error_choice = [(f"Error: {str(e)}", -1)]
-            return error_choice, error_choice[0][0]
-    
+    # Initialize audio devices - function moved to create_controls()
     # Use styles from separate file
     css = APP_CSS
     js_func = APP_JS
@@ -288,119 +412,22 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
     ) as demo:
         
         # Header
-        with gr.Row():
-            gr.Markdown(
-                f"""
-                # {UI_TEXT["app_title"]}
-                {UI_TEXT["app_subtitle"]}
-                """,
-                elem_classes=["header-text"],
-            )
+        create_header()
 
         # Responsive layout structure
         # Desktop: [Meeting List] [Live Dialog] [Audio Controls]
         # Mobile: [Meeting List - Full Width] then [Live Dialog] [Audio Controls]
         
         # Meeting List - Full width on mobile, partial on desktop
-        with gr.Row(elem_classes=["meeting-row"]):
-            with gr.Column(scale=1, elem_classes=["meeting-panel"]):
-                gr.Markdown(UI_TEXT["meeting_list_title"])
-                meeting_list = gr.Dataframe(
-                    headers=TABLE_HEADERS["meeting_list"],
-                    datatype=["str", "str", "str"],
-                    value=load_meetings_data(),
-                    interactive=True
-                )
+        meeting_list = create_meeting_list()
         
         # Dialog and Controls - Side by side on all screens, but different proportions
         with gr.Row(elem_classes=["main-content-row"]):
             # Center panel - Live Dialog
-            with gr.Column(scale=4, elem_classes=["dialog-panel"]):
-                gr.Markdown(UI_TEXT["live_dialog_title"])
-                
-                # Meeting fields
-                with gr.Row():
-                    meeting_name_field = gr.Textbox(
-                        label=FORM_LABELS["meeting_name"],
-                        placeholder=PLACEHOLDER_TEXT["meeting_name"],
-                        value=""
-                    )
-                    duration_field = gr.Textbox(
-                        label=FORM_LABELS["duration"],
-                        value=DEFAULT_VALUES["duration_display"],
-                        interactive=False
-                    )
-                
-                dialog_output = gr.Chatbot(
-                    value=[],  # Start with empty dialog
-                    type="messages",
-                    show_label=False,
-                    placeholder=PLACEHOLDER_TEXT["transcription_dialog"],
-                    height=UI_DIMENSIONS["dialog_height"]  # Set chatbot height
-                )
+            meeting_name_field, duration_field, dialog_output = create_dialog_panel()
             
             # Right panel - Audio Controls
-            with gr.Column(scale=2, elem_classes=["control-panel"]):
-                gr.Markdown(UI_TEXT["audio_controls_title"])
-                
-                # Audio device selection
-                device_choices, initial_device = get_device_choices_and_default()
-                
-                device_dropdown = gr.Dropdown(
-                    label=FORM_LABELS["audio_device"],
-                    choices=device_choices,
-                    value=initial_device,
-                    interactive=True,
-                    allow_custom_value=True
-                )
-                
-                # Device refresh button
-                refresh_btn = gr.Button(
-                    BUTTON_TEXT["refresh_devices"], 
-                    size="sm",
-                    variant="secondary"
-                )
-                
-                # Recording status
-                status_text = gr.Textbox(
-                    label=FORM_LABELS["status"],
-                    value=status_manager.get_status_message(),
-                    interactive=False
-                )
-                
-                # Control buttons - Initialize with proper states
-                current_status = status_manager.current_status
-                logger.info(f"🔍 Current status: {current_status}")
-                initial_button_states = get_button_states(current_status)
-                logger.info(f"🔍 Start button interactive: {initial_button_states['start_btn']['interactive']}")
-                
-                with gr.Row():
-                    start_btn = gr.Button(
-                        initial_button_states["start_btn"]["text"],
-                        variant=initial_button_states["start_btn"]["variant"],
-                        interactive=True  # Force interactive for debugging
-                    )
-                    stop_btn = gr.Button(
-                        initial_button_states["stop_btn"]["text"],
-                        variant=initial_button_states["stop_btn"]["variant"],
-                        interactive=initial_button_states["stop_btn"]["interactive"]
-                    )
-                
-                # Save meeting button
-                save_meeting_btn = gr.Button(
-                    initial_button_states["save_btn"]["text"],
-                    variant=initial_button_states["save_btn"]["variant"],
-                    interactive=initial_button_states["save_btn"]["interactive"]
-                )
-                
-                # Live transcription display
-                live_text = gr.Textbox(
-                    label=FORM_LABELS["live_transcription"],
-                    lines=10,
-                    max_lines=15,
-                    interactive=False,
-                    placeholder=PLACEHOLDER_TEXT["live_transcription"]
-                )
+            device_dropdown, refresh_btn, status_text, start_btn, stop_btn, save_meeting_btn, live_text = create_controls()
         
         # Save panel components removed during cleanup
         
