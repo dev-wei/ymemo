@@ -412,6 +412,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
         }
     }
     
+    
     /* Desktop Layout - Default */
     .meeting-row {
         margin-bottom: 20px !important;
@@ -425,7 +426,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
         gap: 1rem !important;
     }
     .dialog-panel {
-        height: 500px !important;
+        height: 1000px !important;
         overflow-y: auto !important;
         padding-left: 10px !important;
         padding-right: 10px !important;
@@ -445,11 +446,13 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
             height: 250px !important;
         }
         .dialog-panel {
-            height: 400px !important;
+            height: 750px !important;
         }
         .control-panel {
             height: 400px !important;
         }
+        
+        
         
         /* Force vertical stacking with multiple selectors */
         .main-content-row,
@@ -606,11 +609,26 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
             # Center panel - Live Dialog
             with gr.Column(scale=4, elem_classes=["dialog-panel"]):
                 gr.Markdown("### Live Dialog")
+                
+                # Meeting fields
+                with gr.Row():
+                    meeting_name_field = gr.Textbox(
+                        label="Meeting Name",
+                        placeholder="Enter meeting name...",
+                        value=""
+                    )
+                    duration_field = gr.Textbox(
+                        label="Duration",
+                        value="0.0 min",
+                        interactive=False
+                    )
+                
                 dialog_output = gr.Chatbot(
                     value=[],  # Start with empty dialog
                     type="messages",
                     show_label=False,
-                    placeholder="Transcription will appear here when recording starts..."
+                    placeholder="Transcription will appear here when recording starts...",
+                    height=800  # Set chatbot height to 800px
                 )
             
             # Right panel - Audio Controls
