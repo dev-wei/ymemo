@@ -529,6 +529,166 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
         
         # Wire up event handlers
         refresh_btn.click(
+            try:
+                logger.info(f"🎤 START RECORDING CLICKED - Device: {device_name}")
+                logger.info(f"🎤 Current state: {current_state}")
+                
+                # Preserve existing dialog state instead of clearing
+                preserved_state = current_state if current_state is not None else []
+                logger.info(f"🎤 Preserving {len(preserved_state)} existing messages")
+                
+                # Convert preserved state to Gradio format for visual display
+                gradio_messages = []
+                for msg in preserved_state:
+                    gradio_messages.append({
+                        "role": "assistant",
+                        "content": msg["content"]
+                    })
+                logger.info(f"🎤 Converted {len(gradio_messages)} messages to Gradio format")
+                
+                # Find device index from name
+                devices, _ = get_device_choices_and_default()
+                device_index = -1
+                for name, index in devices:
+                    if name == device_name:
+                        device_index = index
+                        break
+                
+                if device_index == -1:
+                    status_manager.set_error(
+                        Exception("Device not found"),
+                        "Selected device not available"
+                    )
+                    start_btn_state, stop_btn_state, save_btn_state = update_button_states()
+                    return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
+                
+                # Check if already recording
+                if audio_session.is_recording():
+                    status_manager.set_error(
+                        Exception("Already recording"),
+                        "Recording already in progress"
+                    )
+                    start_btn_state, stop_btn_state, save_btn_state = update_button_states()
+                    return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
+                
+                # Start recording using session manager
+                status_manager.set_initializing()
+                start_btn_state, stop_btn_state, save_btn_state = update_button_states()
+                
+                config = AUDIO_CONFIG
+                
+                status_manager.set_connecting()
+                
+                if audio_session.start_recording(device_index, config):
+                    status_manager.set_recording()
+                else:
+                    status_manager.set_error(
+                        Exception("Failed to start"),
+                        "Could not start recording"
+                    )
+                
+                # Update button states based on final status
+                start_btn_state, stop_btn_state, save_btn_state = update_button_states()
+                return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
+                
+            except Exception as e:
+                logger.error(f"❌ START RECORDING ERROR: {e}")
+                import traceback
+                traceback.print_exc()
+                status_manager.set_error(e, "Failed to start recording")
+                start_btn_state, stop_btn_state, save_btn_state = update_button_states()
+                return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
+        
+        def stop_recording():
+            """Stop recording."""
+            try:
+                status_manager.set_stopping()
+                start_btn_state, stop_btn_state, save_btn_state = update_button_states()
+                
+                if audio_session.stop_recording():
+                    status_manager.set_stopped()
+                else:
+                    status_manager.set_error(
+                        Exception("Failed to stop"),
+                        "Could not stop recording"
+                    )
+                
+                # Update button states based on final status
+                start_btn_state, stop_btn_state, save_btn_state = update_button_states()
+                return status_manager.get_status_message(), start_btn_state, stop_btn_state, save_btn_state
+                
+            except Exception as e:
+                status_manager.set_error(e, "Failed to stop recording")
+                start_btn_state, stop_btn_state, save_btn_state = update_button_states()
+                return status_manager.get_status_message(), start_btn_state, stop_btn_state, save_btn_state
+        
+        def handle_transcription_update(current_state, message):
+            """Handle new transcription message and update dialog state."""
+            try:
+                logger.debug(f"UI: Handling transcription update: {message}")
+                updated_state, gradio_messages = update_dialog_state(current_state, message)
+                return updated_state, gradio_messages
+            except Exception as e:
+                logger.error(f"Error handling transcription update: {e}")
+                return current_state, []
+        
+        # Use a shared update trigger
+        update_trigger = gr.State(0)
+        
+        def immediate_transcription_update(message):
+            """Immediately handle transcription update."""
+            logger.debug(f"UI: Immediate transcription update: {message}")
+            # This will be handled by the session manager directly
+            pass
+        
+        def get_latest_dialog_state():
+            """Get the latest dialog state from session manager."""
+            try:
+                # Get current transcriptions from session manager
+                current_transcriptions = audio_session.get_current_transcriptions()
+                
+                # Convert to Gradio format
+                gradio_messages = []
+                for msg in current_transcriptions:
+                    gradio_messages.append({
+                        "role": "assistant",
+                        "content": msg["content"]
+                    })
+                
+                return current_transcriptions, gradio_messages
+            except Exception as e:
+                logger.error(f"Error getting dialog state: {e}")
+                return [], []
+        
+        def conditional_update():
+            """Only update if recording is active or there are messages."""
+            try:
+                # Get current transcriptions
+                current_transcriptions = audio_session.get_current_transcriptions()
+                
+                # If no transcriptions and not recording, return None (no update)
+                if not current_transcriptions and not audio_session.is_recording():
+                    return gr.skip(), gr.skip()
+                
+                # Convert to Gradio format
+                gradio_messages = []
+                for msg in current_transcriptions:
+                    gradio_messages.append({
+                        "role": "assistant",
+                        "content": msg["content"]
+                    })
+                
+                return current_transcriptions, gradio_messages
+            except Exception as e:
+                logger.error(f"Error in conditional update: {e}")
+                return gr.skip(), gr.skip()
+        
+        # Register callback with session manager
+        audio_session.add_transcription_callback(immediate_transcription_update)
+        
+        # Timer for dialog updates only (not button updates)
+        timer = gr.Timer(value=UI_DIMENSIONS["timer_interval"])  # Check for updates every 500ms
+        refresh_btn.click(
             fn=refresh_devices,
             outputs=[device_dropdown, status_text]
         )
