@@ -12,6 +12,10 @@ from src.utils.status_manager import status_manager, AudioStatus
 from src.managers.meeting_repository import get_all_meetings, create_meeting, MeetingRepositoryError
 from src.core.models import Meeting
 from .interface_utils import load_meetings_data, refresh_meetings_list, save_meeting_to_database
+from .interface_constants import (
+    AVAILABLE_THEMES, DEFAULT_THEME, BUTTON_TEXT, UI_TEXT, PLACEHOLDER_TEXT,
+    UI_DIMENSIONS, TABLE_HEADERS, FORM_LABELS, DEFAULT_VALUES, AUDIO_CONFIG
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +36,19 @@ def get_button_states(status: AudioStatus) -> dict:
         # No recording, no completed recording
         return {
             "start_btn": {
-                "text": "🎤 Start Recording",
+                "text": BUTTON_TEXT["start_recording"],
                 "variant": "primary",
                 "interactive": True,
                 "visible": True
             },
             "stop_btn": {
-                "text": "⏹️ Stop Recording", 
+                "text": BUTTON_TEXT["stop_recording"], 
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
             "save_btn": {
-                "text": "💾 Save as New Meeting",
+                "text": BUTTON_TEXT["save_meeting"],
                 "variant": "secondary", 
                 "interactive": False,
                 "visible": True
@@ -55,19 +59,19 @@ def get_button_states(status: AudioStatus) -> dict:
         # Starting up
         return {
             "start_btn": {
-                "text": "🔄 Starting...",
+                "text": BUTTON_TEXT["starting"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
             "stop_btn": {
-                "text": "⏹️ Stop Recording",
+                "text": BUTTON_TEXT["stop_recording"],
                 "variant": "secondary", 
                 "interactive": False,
                 "visible": True
             },
             "save_btn": {
-                "text": "💾 Save as New Meeting",
+                "text": BUTTON_TEXT["save_meeting"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
@@ -78,19 +82,19 @@ def get_button_states(status: AudioStatus) -> dict:
         # Recording in progress
         return {
             "start_btn": {
-                "text": "🎤 Start Recording",
+                "text": BUTTON_TEXT["start_recording"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
             "stop_btn": {
-                "text": "⏹️ Stop Recording",
+                "text": BUTTON_TEXT["stop_recording"],
                 "variant": "primary",  # Primary variant for active stop
                 "interactive": True,
                 "visible": True
             },
             "save_btn": {
-                "text": "💾 Save as New Meeting", 
+                "text": BUTTON_TEXT["save_meeting"], 
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
@@ -101,19 +105,19 @@ def get_button_states(status: AudioStatus) -> dict:
         # Stop in progress
         return {
             "start_btn": {
-                "text": "🎤 Start Recording",
+                "text": BUTTON_TEXT["start_recording"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
             "stop_btn": {
-                "text": "⏳ Stopping...",
+                "text": BUTTON_TEXT["stopping"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
             "save_btn": {
-                "text": "💾 Save as New Meeting",
+                "text": BUTTON_TEXT["save_meeting"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
@@ -124,19 +128,19 @@ def get_button_states(status: AudioStatus) -> dict:
         # Recording just completed - highlight save button
         return {
             "start_btn": {
-                "text": "🎤 Start Recording",
+                "text": BUTTON_TEXT["start_recording"],
                 "variant": "secondary",
                 "interactive": True,
                 "visible": True
             },
             "stop_btn": {
-                "text": "⏹️ Stop Recording",
+                "text": BUTTON_TEXT["stop_recording"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
             "save_btn": {
-                "text": "💾 Save as New Meeting",
+                "text": BUTTON_TEXT["save_meeting"],
                 "variant": "primary",  # Highlight the save button
                 "interactive": True,
                 "visible": True
@@ -147,19 +151,19 @@ def get_button_states(status: AudioStatus) -> dict:
         # Error occurred - allow restart
         return {
             "start_btn": {
-                "text": "🎤 Start Recording",
+                "text": BUTTON_TEXT["start_recording"],
                 "variant": "secondary",
                 "interactive": True,
                 "visible": True
             },
             "stop_btn": {
-                "text": "⏹️ Stop Recording",
+                "text": BUTTON_TEXT["stop_recording"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
             "save_btn": {
-                "text": "💾 Save as New Meeting",
+                "text": BUTTON_TEXT["save_meeting"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
@@ -170,19 +174,19 @@ def get_button_states(status: AudioStatus) -> dict:
         # Default fallback
         return {
             "start_btn": {
-                "text": "🎤 Start Recording",
+                "text": BUTTON_TEXT["start_recording"],
                 "variant": "primary",
                 "interactive": True,
                 "visible": True
             },
             "stop_btn": {
-                "text": "⏹️ Stop Recording",
+                "text": BUTTON_TEXT["stop_recording"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
             "save_btn": {
-                "text": "💾 Save as New Meeting",
+                "text": BUTTON_TEXT["save_meeting"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
@@ -224,25 +228,16 @@ def update_button_states():
         logger.error(f"Error updating button states: {e}")
         # Return safe defaults
         return (
-            gr.update(value="🎤 Start Recording", variant="primary", interactive=True),
-            gr.update(value="⏹️ Stop Recording", variant="secondary", interactive=False),
-            gr.update(value="💾 Save as New Meeting", variant="secondary", interactive=False)
+            gr.update(value=BUTTON_TEXT["start_recording"], variant="primary", interactive=True),
+            gr.update(value=BUTTON_TEXT["stop_recording"], variant="secondary", interactive=False),
+            gr.update(value=BUTTON_TEXT["save_meeting"], variant="secondary", interactive=False)
         )
 
 
-# Available themes
-THEMES = {
-    "Default": gr.themes.Default(),
-    "Soft": gr.themes.Soft(),
-    "Monochrome": gr.themes.Monochrome(),
-    "Glass": gr.themes.Glass(),
-    "Origin": gr.themes.Origin(),
-    "Citrus": gr.themes.Citrus(),
-    "Ocean": gr.themes.Ocean(),
-    "Base": gr.themes.Base()
-}
+# Use themes from constants
+THEMES = AVAILABLE_THEMES
 
-def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
+def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
     """Create the main Gradio interface.
     
     Args:
@@ -252,7 +247,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
         Gradio Blocks interface
     """
     # Get theme
-    theme = THEMES.get(theme_name, THEMES["Ocean"])
+    theme = THEMES.get(theme_name, THEMES[DEFAULT_THEME])
     
     # Initialize audio devices
     def get_device_choices_and_default():
@@ -260,7 +255,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
         try:
             devices = get_audio_devices(refresh=True)
             if not devices:
-                return [("No devices", -1)], "No devices"
+                return [(DEFAULT_VALUES["no_devices"], -1)], DEFAULT_VALUES["no_devices"]
             
             device_index = get_default_device_index()
             default_device = None
@@ -532,9 +527,9 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
         # Header
         with gr.Row():
             gr.Markdown(
-                """
-                # 🎤 Voice Meeting App
-                ### Real-time speech transcription with speaker identification
+                f"""
+                # {UI_TEXT["app_title"]}
+                {UI_TEXT["app_subtitle"]}
                 """,
                 elem_classes=["header-text"],
             )
@@ -546,9 +541,9 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
         # Meeting List - Full width on mobile, partial on desktop
         with gr.Row(elem_classes=["meeting-row"]):
             with gr.Column(scale=1, elem_classes=["meeting-panel"]):
-                gr.Markdown("### Meeting List")
+                gr.Markdown(UI_TEXT["meeting_list_title"])
                 meeting_list = gr.Dataframe(
-                    headers=["Meeting", "Date", "Duration"],
+                    headers=TABLE_HEADERS["meeting_list"],
                     datatype=["str", "str", "str"],
                     value=load_meetings_data(),
                     interactive=True
@@ -558,18 +553,18 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
         with gr.Row(elem_classes=["main-content-row"]):
             # Center panel - Live Dialog
             with gr.Column(scale=4, elem_classes=["dialog-panel"]):
-                gr.Markdown("### Live Dialog")
+                gr.Markdown(UI_TEXT["live_dialog_title"])
                 
                 # Meeting fields
                 with gr.Row():
                     meeting_name_field = gr.Textbox(
-                        label="Meeting Name",
-                        placeholder="Enter meeting name...",
+                        label=FORM_LABELS["meeting_name"],
+                        placeholder=PLACEHOLDER_TEXT["meeting_name"],
                         value=""
                     )
                     duration_field = gr.Textbox(
-                        label="Duration",
-                        value="0.0 min",
+                        label=FORM_LABELS["duration"],
+                        value=DEFAULT_VALUES["duration_display"],
                         interactive=False
                     )
                 
@@ -577,19 +572,19 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                     value=[],  # Start with empty dialog
                     type="messages",
                     show_label=False,
-                    placeholder="Transcription will appear here when recording starts...",
-                    height=800  # Set chatbot height to 800px
+                    placeholder=PLACEHOLDER_TEXT["transcription_dialog"],
+                    height=UI_DIMENSIONS["dialog_height"]  # Set chatbot height
                 )
             
             # Right panel - Audio Controls
             with gr.Column(scale=2, elem_classes=["control-panel"]):
-                gr.Markdown("### Audio Controls")
+                gr.Markdown(UI_TEXT["audio_controls_title"])
                 
                 # Audio device selection
                 device_choices, initial_device = get_device_choices_and_default()
                 
                 device_dropdown = gr.Dropdown(
-                    label="Audio Device",
+                    label=FORM_LABELS["audio_device"],
                     choices=device_choices,
                     value=initial_device,
                     interactive=True,
@@ -598,14 +593,14 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                 
                 # Device refresh button
                 refresh_btn = gr.Button(
-                    "🔄 Refresh Devices", 
+                    BUTTON_TEXT["refresh_devices"], 
                     size="sm",
                     variant="secondary"
                 )
                 
                 # Recording status
                 status_text = gr.Textbox(
-                    label="Status",
+                    label=FORM_LABELS["status"],
                     value=status_manager.get_status_message(),
                     interactive=False
                 )
@@ -637,11 +632,11 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                 
                 # Live transcription display
                 live_text = gr.Textbox(
-                    label="Live Transcription",
+                    label=FORM_LABELS["live_transcription"],
                     lines=10,
                     max_lines=15,
                     interactive=False,
-                    placeholder="Transcription will appear here..."
+                    placeholder=PLACEHOLDER_TEXT["live_transcription"]
                 )
         
         # Save panel components removed during cleanup
@@ -821,10 +816,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                 status_manager.set_initializing()
                 start_btn_state, stop_btn_state, save_btn_state = update_button_states()
                 
-                config = {
-                    'region': 'us-east-1',
-                    'language_code': 'en-US'
-                }
+                config = AUDIO_CONFIG
                 
                 status_manager.set_connecting()
                 
@@ -936,7 +928,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
         audio_session.add_transcription_callback(immediate_transcription_update)
         
         # Timer for dialog updates only (not button updates)
-        timer = gr.Timer(value=0.5)  # Check for updates every 500ms
+        timer = gr.Timer(value=UI_DIMENSIONS["timer_interval"])  # Check for updates every 500ms
         
         # Wire up event handlers
         refresh_btn.click(
