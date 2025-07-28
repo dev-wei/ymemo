@@ -694,8 +694,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                     placeholder="Transcription will appear here..."
                 )
         
-        # Save panel temporarily disabled to fix button click issue
-        # save_panel_html = gr.HTML("<!-- Save panel disabled -->")
+        # Save panel components removed during cleanup
         
         # Hidden components for backend data handling (keep for compatibility)
         meeting_name_input = gr.Textbox(
@@ -1133,11 +1132,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                 )
         
         
-        # Save panel functionality temporarily disabled to fix button click issue
-        # save_meeting_btn.click(
-        #     fn=open_save_panel,
-        #     outputs=[save_panel_html]
-        # )
+        # Save panel functionality removed during cleanup
         
         # Create a hidden component for JavaScript callbacks
         js_callback_output = gr.HTML(visible=False)
@@ -1173,8 +1168,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
             outputs=[meeting_list, js_callback_output]
         )
         
-        # Setup callback temporarily disabled to fix button click issue
-        # demo.load(setup_save_callback, outputs=[js_callback_output])
+        # Setup callback removed during cleanup
         
         # Note: Removed automatic button updates to prevent interference with clicks
         # Buttons are updated manually in the event handlers when needed
