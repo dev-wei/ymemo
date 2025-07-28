@@ -187,11 +187,12 @@ class AudioSessionManager:
                 # Clear stop event for new recording session
                 self._stop_event.clear()
                 
-                # Clear previous session data
-                self.current_transcriptions.clear()
+                # Clear partial results but preserve transcriptions for multi-recording
                 self.active_partial_results.clear()
                 self.session_start_time = datetime.now()
                 self.session_end_time = None
+                
+                logger.info(f"🎤 SessionManager: Preserving {len(self.current_transcriptions)} existing transcriptions")
                 
                 # Create audio processor with default or provided config
                 default_config = {

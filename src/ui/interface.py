@@ -830,8 +830,18 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                 logger.info(f"🎤 START RECORDING CLICKED - Device: {device_name}")
                 logger.info(f"🎤 Current state: {current_state}")
                 
-                # Clear dialog state for new session
-                empty_state = []
+                # Preserve existing dialog state instead of clearing
+                preserved_state = current_state if current_state is not None else []
+                logger.info(f"🎤 Preserving {len(preserved_state)} existing messages")
+                
+                # Convert preserved state to Gradio format for visual display
+                gradio_messages = []
+                for msg in preserved_state:
+                    gradio_messages.append({
+                        "role": "assistant",
+                        "content": msg["content"]
+                    })
+                logger.info(f"🎤 Converted {len(gradio_messages)} messages to Gradio format")
                 
                 # Find device index from name
                 devices, _ = get_device_choices_and_default()
@@ -847,7 +857,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                         "Selected device not available"
                     )
                     start_btn_state, stop_btn_state, save_btn_state = update_button_states()
-                    return status_manager.get_status_message(), empty_state, [], start_btn_state, stop_btn_state, save_btn_state
+                    return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
                 
                 # Check if already recording
                 if audio_session.is_recording():
@@ -856,7 +866,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                         "Recording already in progress"
                     )
                     start_btn_state, stop_btn_state, save_btn_state = update_button_states()
-                    return status_manager.get_status_message(), empty_state, [], start_btn_state, stop_btn_state, save_btn_state
+                    return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
                 
                 # Start recording using session manager
                 status_manager.set_initializing()
@@ -879,7 +889,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                 
                 # Update button states based on final status
                 start_btn_state, stop_btn_state, save_btn_state = update_button_states()
-                return status_manager.get_status_message(), empty_state, [], start_btn_state, stop_btn_state, save_btn_state
+                return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
                 
             except Exception as e:
                 logger.error(f"❌ START RECORDING ERROR: {e}")
@@ -887,7 +897,7 @@ def create_interface(theme_name: str = "Ocean") -> gr.Blocks:
                 traceback.print_exc()
                 status_manager.set_error(e, "Failed to start recording")
                 start_btn_state, stop_btn_state, save_btn_state = update_button_states()
-                return status_manager.get_status_message(), empty_state, [], start_btn_state, stop_btn_state, save_btn_state
+                return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
         
         def stop_recording():
             """Stop recording."""
