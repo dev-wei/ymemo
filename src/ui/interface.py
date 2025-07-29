@@ -14,14 +14,16 @@ from src.core.models import Meeting
 from .interface_utils import load_meetings_data, refresh_meetings_list, save_meeting_to_database
 from .interface_constants import (
     AVAILABLE_THEMES, DEFAULT_THEME, BUTTON_TEXT, UI_TEXT, PLACEHOLDER_TEXT,
-    UI_DIMENSIONS, TABLE_HEADERS, FORM_LABELS, DEFAULT_VALUES, AUDIO_CONFIG
+    UI_DIMENSIONS, TABLE_HEADERS, FORM_LABELS, DEFAULT_VALUES, AUDIO_CONFIG,
+    COPY_CONFIG
 )
 from .interface_styles import APP_CSS, APP_JS
 from .interface_handlers import (
     refresh_devices, start_recording, stop_recording, handle_transcription_update,
     get_latest_dialog_state, conditional_update, open_save_panel, save_meeting,
     immediate_transcription_update, setup_save_callback, get_device_choices_and_default,
-    download_transcript, update_download_button_visibility, create_download_button, clear_dialog
+    download_transcript, update_download_button_visibility, create_download_button, clear_dialog,
+    handle_copy_event
 )
 
 logger = logging.getLogger(__name__)
@@ -293,7 +295,10 @@ def create_dialog_panel():
             type="messages",
             show_label=False,
             placeholder=PLACEHOLDER_TEXT["transcription_dialog"],
-            height=UI_DIMENSIONS["dialog_height"]  # Set chatbot height
+            height=UI_DIMENSIONS["dialog_height"],  # Set chatbot height
+            show_copy_button=True,  # Enable individual message copy buttons
+            show_copy_all_button=True,  # Enable copy all messages button
+            watermark=COPY_CONFIG["watermark"]  # Add watermark to copied content
         )
         
         return meeting_name_field, duration_field, dialog_output
@@ -572,6 +577,12 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             fn=clear_dialog,
             outputs=[dialog_state, dialog_output],
             queue=False  # Immediate response for clearing
+        )
+        
+        # Copy event handler - wire up chatbot's copy event for analytics
+        dialog_output.copy(
+            fn=handle_copy_event,
+            queue=False  # Immediate response for copying
         )
         
         # Save panel functionality

@@ -611,3 +611,23 @@ def create_download_button(file_path):
             variant="secondary",
             visible=False
         )
+
+
+def handle_copy_event(copy_data):
+    """Handle copy events from the chatbot."""
+    try:
+        logger.info(f"📋 Copy event triggered")
+        logger.info(f"📋 Copied content length: {len(copy_data.value) if copy_data.value else 0} characters")
+        
+        # Log copy usage for analytics (optional)
+        if copy_data.value:
+            content_preview = copy_data.value[:100] + "..." if len(copy_data.value) > 100 else copy_data.value
+            logger.info(f"📋 Copy preview: {content_preview}")
+        
+        # Return the copied value (required by Gradio copy event)
+        return copy_data.value
+        
+    except Exception as e:
+        logger.error(f"❌ Error handling copy event: {e}")
+        # Return original value even on error
+        return copy_data.value if hasattr(copy_data, 'value') else ""
