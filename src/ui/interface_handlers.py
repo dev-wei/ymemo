@@ -13,6 +13,7 @@ from src.managers.session_manager import get_audio_session
 from src.utils.status_manager import status_manager
 from .interface_utils import load_meetings_data, save_meeting_to_database
 from .interface_constants import DEFAULT_VALUES, AUDIO_CONFIG
+from src.managers.meeting_repository import get_all_meetings, delete_meeting_by_id
 
 logger = logging.getLogger(__name__)
 
@@ -733,3 +734,161 @@ def get_duration_analytics():
             'segment_count': 0,
             'is_recording': False
         }
+
+
+# Meeting List Management Handlers
+def handle_meeting_row_selection(evt: gr.SelectData):
+    """Handle meeting row selection - enable delete button and store meeting ID."""
+    try:
+        logger.info(f"🎯 Meeting row selected at index: {evt.index}")
+        
+        row_index = evt.index
+        meetings = get_all_meetings()
+        
+        if 0 <= row_index < len(meetings):
+            selected_meeting = meetings[row_index]
+            logger.info(f"✅ Selected meeting: {selected_meeting.name} (ID: {selected_meeting.id})")
+            
+            return (
+                gr.update(interactive=True, variant="stop"),  # Enable delete button
+                selected_meeting.id,  # Store meeting ID
+                f"Selected: {selected_meeting.name}"  # Status message (optional)
+            )
+        else:
+            logger.warning(f"⚠️ Invalid row index: {row_index}, total meetings: {len(meetings)}")
+            return gr.update(interactive=False), None, ""
+            
+    except Exception as e:
+        logger.error(f"❌ Error in meeting selection: {e}")
+        return gr.update(interactive=False), None, "Selection error"
+
+
+def delete_meeting_by_id_input(meeting_id_text):
+    """Delete a meeting by ID entered in text field."""
+    try:
+        logger.info(f"🗑️ Delete meeting by ID requested: '{meeting_id_text}'")
+        
+        # Validate input
+        if not meeting_id_text or not meeting_id_text.strip():
+            error_msg = "Please enter a meeting ID"
+            logger.warning(f"❌ {error_msg}")
+            return (
+                load_meetings_data(),  # Keep current meeting list
+                gr.update(value=error_msg, visible=True)
+            )
+        
+        # Parse meeting ID
+        try:
+            meeting_id = int(meeting_id_text.strip())
+            logger.info(f"🗑️ Parsed meeting ID: {meeting_id}")
+        except ValueError:
+            error_msg = f"Invalid meeting ID: '{meeting_id_text}'. Please enter a valid number."
+            logger.error(f"❌ {error_msg}")
+            return (
+                load_meetings_data(),  # Keep current meeting list
+                gr.update(value=f"❌ {error_msg}", visible=True)
+            )
+        
+        # Attempt to delete the meeting
+        try:
+            success = delete_meeting_by_id(meeting_id)
+            
+            if success:
+                success_msg = f"Meeting ID {meeting_id} deleted successfully! 🗑️"
+                logger.info(f"✅ {success_msg}")
+                
+                # Show success notification
+                gr.Info(success_msg, duration=3)
+                
+                # Refresh meeting list and clear input
+                refreshed_data = load_meetings_data()
+                logger.info(f"📋 Refreshed meeting list with {len(refreshed_data)} meetings")
+                
+                return (
+                    refreshed_data,  # Refresh meeting list
+                    gr.update(value="✅ Meeting deleted successfully", visible=True)
+                )
+            else:
+                error_msg = f"Meeting ID {meeting_id} not found or could not be deleted"
+                logger.error(f"❌ {error_msg}")
+                return (
+                    load_meetings_data(),  # Keep current meeting list
+                    gr.update(value=f"❌ {error_msg}", visible=True)
+                )
+                
+        except Exception as delete_error:
+            error_msg = f"Error deleting meeting ID {meeting_id}: {str(delete_error)}"
+            logger.error(f"❌ {error_msg}")
+            return (
+                load_meetings_data(),  # Keep current meeting list
+                gr.update(value=f"❌ {error_msg}", visible=True)
+            )
+            
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        logger.error(f"❌ Error in delete_meeting_by_id_input: {e}")
+        return (
+            load_meetings_data(),  # Keep current meeting list
+            gr.update(value=f"❌ {error_msg}", visible=True)
+        )
+
+
+def delete_meeting_with_confirmation(selected_indices: list):
+    """Delete selected meetings and refresh the list, clearing all checkboxes."""
+    try:
+        logger.info(f"🗑️ Delete button clicked for indices: {selected_indices}")
+        
+        if not selected_indices:
+            logger.warning("⚠️ No meetings selected for deletion")
+            return gr.update(), gr.update(), gr.update(value="No meetings selected"), []
+        
+        # Get current meetings to map indices to IDs
+        meetings = get_all_meetings()
+        deleted_count = 0
+        failed_count = 0
+        
+        # Delete each selected meeting
+        for index in selected_indices:
+            if 0 <= index < len(meetings):
+                meeting = meetings[index]
+                try:
+                    if delete_meeting_by_id(meeting.id):
+                        logger.info(f"✅ Meeting {meeting.id} ({meeting.name}) deleted successfully")
+                        deleted_count += 1
+                    else:
+                        logger.error(f"❌ Failed to delete meeting {meeting.id} ({meeting.name})")
+                        failed_count += 1
+                except Exception as e:
+                    logger.error(f"❌ Error deleting meeting {meeting.id}: {e}")
+                    failed_count += 1
+            else:
+                logger.warning(f"⚠️ Invalid index: {index}")
+                failed_count += 1
+        
+        # Refresh meeting list (all checkboxes will be unchecked)
+        refreshed_data = load_meetings_data()
+        logger.info(f"📋 Refreshed meeting list with {len(refreshed_data)} meetings")
+        
+        # Show appropriate success/error notification
+        if deleted_count > 0 and failed_count == 0:
+            message = f"{deleted_count} meeting{'s' if deleted_count > 1 else ''} deleted successfully! 🗑️"
+            gr.Info(message, duration=3)
+        elif deleted_count > 0 and failed_count > 0:
+            message = f"{deleted_count} deleted, {failed_count} failed"
+            gr.Info(message, duration=4)
+        else:
+            message = f"Failed to delete {failed_count} meeting{'s' if failed_count > 1 else ''}"
+            
+        return (
+            refreshed_data,  # Refresh meeting list with unchecked checkboxes
+            gr.update(
+                interactive=False,
+                value="🗑️ Delete Selected"  # Reset button text
+            ),  # Disable delete button
+            gr.update(value="💡 Check boxes to select meetings for deletion", visible=True),  # Reset status
+            []  # Clear stored indices
+        )
+            
+    except Exception as e:
+        logger.error(f"❌ Error deleting meetings: {e}")
+        return gr.update(), gr.update(), gr.update(value=f"Error: {str(e)}"), []

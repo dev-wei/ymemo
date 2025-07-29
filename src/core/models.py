@@ -47,7 +47,7 @@ class Meeting:
         return data
     
     def to_display_row(self) -> list:
-        """Convert Meeting to display format for Gradio Dataframe."""
+        """Convert Meeting to display format for Gradio Dataframe with ID column."""
         # Format date for display
         date_str = ""
         if self.created_at:
@@ -58,7 +58,14 @@ class Meeting:
         if self.duration is not None:
             duration_str = f"{self.duration:.1f} min"
         
-        return [self.name or "Unnamed Meeting", date_str, duration_str, self.get_word_count_display()]
+        # Return meeting data with ID as first column
+        return [
+            self.id,  # Meeting ID column
+            self.name or "Unnamed Meeting", 
+            date_str, 
+            duration_str,
+            self.get_word_count_display()
+        ]
     
     def get_formatted_duration(self) -> str:
         """Get formatted duration string."""

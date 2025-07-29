@@ -180,6 +180,32 @@ class MeetingRepository:
         except Exception as e:
             logger.error(f"❌ Failed to fetch recent meetings: {e}")
             raise MeetingRepositoryError(f"Failed to fetch recent meetings: {e}")
+    
+    def delete_meeting(self, meeting_id: int) -> bool:
+        """Delete a meeting from the database by ID."""
+        try:
+            logger.info(f"🗑️ Deleting meeting with ID: {meeting_id}")
+            
+            # Validate meeting ID
+            if not meeting_id or meeting_id <= 0:
+                raise ValueError("Invalid meeting ID")
+            
+            # Delete from database
+            response = self.client.table(self.table_name).delete().eq('id', meeting_id).execute()
+            
+            if response.data:
+                logger.info(f"✅ Successfully deleted meeting {meeting_id}")
+                return True
+            else:
+                logger.warning(f"⚠️ No meeting found with ID {meeting_id}")
+                return False
+                
+        except ValueError as e:
+            logger.error(f"❌ Invalid meeting ID {meeting_id}: {e}")
+            raise MeetingRepositoryError(f"Invalid meeting ID: {e}")
+        except Exception as e:
+            logger.error(f"❌ Failed to delete meeting {meeting_id}: {e}")
+            raise MeetingRepositoryError(f"Failed to delete meeting: {e}")
 
 
 # Global repository instance
@@ -208,6 +234,11 @@ def create_meeting(name: str, duration: float, transcription: str, audio_file_pa
 def get_meeting_by_id(meeting_id: int) -> Optional[Meeting]:
     """Get a meeting by ID."""
     return get_meeting_repository().get_meeting_by_id(meeting_id)
+
+
+def delete_meeting_by_id(meeting_id: int) -> bool:
+    """Delete a meeting by ID."""
+    return get_meeting_repository().delete_meeting(meeting_id)
 
 
 def test_database_connection() -> bool:

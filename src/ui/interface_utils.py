@@ -7,14 +7,14 @@ from src.managers.meeting_repository import get_all_meetings, create_meeting, Me
 logger = logging.getLogger(__name__)
 
 
-def load_meetings_data() -> List[List[str]]:
-    """Load meetings from database and format for Gradio Dataframe."""
+def load_meetings_data() -> List[List]:
+    """Load meetings from database and format for Gradio Dataframe with ID."""
     try:
         meetings = get_all_meetings()
         if not meetings:
-            return [["No meetings yet", "", ""]]
+            return [["", "No meetings yet", "", "", ""]]
         
-        # Convert meetings to display format
+        # Convert meetings to display format with ID column
         meeting_data = []
         for meeting in meetings:
             meeting_data.append(meeting.to_display_row())
@@ -22,7 +22,7 @@ def load_meetings_data() -> List[List[str]]:
         return meeting_data
     except Exception as e:
         logger.error(f"Failed to load meetings: {e}")
-        return [["Error loading meetings", "", ""]]
+        return [["", "Error loading meetings", "", "", ""]]
 
 
 def refresh_meetings_list():

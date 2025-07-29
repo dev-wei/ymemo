@@ -23,7 +23,8 @@ from .interface_handlers import (
     get_latest_dialog_state, conditional_update, submit_new_meeting,
     immediate_transcription_update, get_device_choices_and_default,
     download_transcript, update_download_button_visibility, create_download_button, clear_dialog,
-    handle_copy_event, get_current_duration_display, reset_meeting_duration
+    handle_copy_event, get_current_duration_display, reset_meeting_duration,
+    delete_meeting_by_id_input
 )
 
 logger = logging.getLogger(__name__)
@@ -259,21 +260,44 @@ def create_header():
 
 
 def create_meeting_list():
-    """Create the meeting list panel."""
+    """Create the meeting list panel with delete functionality."""
     with gr.Row(elem_classes=["meeting-row"]):
         with gr.Column(scale=1, elem_classes=["meeting-panel"]):
             gr.Markdown(UI_TEXT["meeting_list_title"])
+            
             meeting_list = gr.Dataframe(
                 headers=TABLE_HEADERS["meeting_list"],
-                datatype=["str", "str", "str", "str"],
+                datatype=["number", "str", "str", "str", "str"],  # number for ID
                 value=load_meetings_data(),
-                interactive=False,           # Disable cell/row editing
+                interactive=False,           # Make completely readonly 
                 show_search="search",        # Enable search functionality
                 show_fullscreen_button=True, # Allow fullscreen viewing  
                 show_copy_button=True,       # Enable copying data
+                show_row_numbers=True,       # Show row numbers for additional clarity
                 wrap=True                    # Enable text wrapping if needed
             )
-            return meeting_list
+            
+            # Delete section with text input
+            with gr.Row():
+                meeting_id_input = gr.Textbox(
+                    label="Meeting ID to Delete",
+                    placeholder="Enter meeting ID (e.g., 1, 2, 3)",
+                    scale=3
+                )
+                delete_meeting_btn = gr.Button(
+                    "🗑️ Delete Meeting", 
+                    variant="stop", 
+                    scale=1,
+                    size="sm"
+                )
+            
+            # Status message for delete operations
+            delete_status = gr.HTML(
+                value="💡 Enter a meeting ID from the table above and click Delete",
+                visible=True
+            )
+            
+            return meeting_list, meeting_id_input, delete_meeting_btn, delete_status
 
 
 def create_dialog_panel():
@@ -409,7 +433,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
         # Mobile: [Meeting List - Full Width] then [Live Dialog] [Audio Controls]
         
         # Meeting List - Full width on mobile, partial on desktop
-        meeting_list = create_meeting_list()
+        meeting_list, meeting_id_input, delete_meeting_btn, delete_status = create_meeting_list()
         
         # Dialog and Controls - Side by side on all screens, but different proportions
         with gr.Row(elem_classes=["main-content-row"]):
@@ -563,6 +587,17 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             # Show the status message after submission
             fn=lambda: gr.update(visible=True),
             outputs=[save_status_message]
+        )
+        
+        # Simple ID-based delete functionality
+        delete_meeting_btn.click(
+            fn=delete_meeting_by_id_input,
+            inputs=[meeting_id_input],
+            outputs=[meeting_list, delete_status]
+        ).then(
+            # Clear the input field after successful operation
+            fn=lambda: "",
+            outputs=[meeting_id_input]
         )
         
         # Note: Removed automatic button updates to prevent interference with clicks
