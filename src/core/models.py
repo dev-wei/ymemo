@@ -59,7 +59,7 @@ class Meeting:
         if self.duration is not None:
             duration_str = f"{self.duration:.1f} min"
         
-        return [self.name or "Unnamed Meeting", date_str, duration_str]
+        return [self.name or "Unnamed Meeting", date_str, duration_str, self.get_word_count_display()]
     
     def get_formatted_duration(self) -> str:
         """Get formatted duration string."""
@@ -80,6 +80,23 @@ class Meeting:
             return self.transcription
         
         return self.transcription[:max_length] + "..."
+    
+    def get_word_count(self) -> int:
+        """Get the word count of the transcription."""
+        if not self.transcription:
+            return 0
+        # Simple but accurate word counting
+        return len(self.transcription.strip().split())
+    
+    def get_word_count_display(self) -> str:
+        """Get formatted word count for display."""
+        count = self.get_word_count()
+        if count == 0:
+            return "0 words"
+        elif count == 1:
+            return "1 word"
+        else:
+            return f"{count} words"
     
     def __str__(self) -> str:
         """String representation of Meeting."""

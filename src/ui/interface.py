@@ -265,7 +265,7 @@ def create_meeting_list():
             gr.Markdown(UI_TEXT["meeting_list_title"])
             meeting_list = gr.Dataframe(
                 headers=TABLE_HEADERS["meeting_list"],
-                datatype=["str", "str", "str"],
+                datatype=["str", "str", "str", "str"],
                 value=load_meetings_data(),
                 interactive=True
             )

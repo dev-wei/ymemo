@@ -52,7 +52,7 @@ UI_DIMENSIONS = {
 
 # Table headers
 TABLE_HEADERS = {
-    "meeting_list": ["Meeting", "Date", "Duration"]
+    "meeting_list": ["Meeting", "Date", "Duration", "Length"]
 }
 
 # Form labels
