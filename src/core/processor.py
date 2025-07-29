@@ -45,6 +45,7 @@ class AudioProcessor:
         self.is_running = False
         self.transcription_callback: Optional[Callable[[TranscriptionResult], None]] = None
         self.error_callback: Optional[Callable[[Exception], None]] = None
+        self.connection_health_callback: Optional[Callable[[bool, str], None]] = None
         
         # Tasks
         self._capture_task: Optional[asyncio.Task] = None
@@ -74,6 +75,11 @@ class AudioProcessor:
             # Log provider instance details
             if hasattr(self.capture_provider, '_instance_id'):
                 logger.info(f"🔧 AudioProcessor: Using capture provider instance {self.capture_provider._instance_id}")
+            
+            # Set up connection health monitoring for AWS Transcribe
+            if hasattr(self.transcription_provider, 'set_connection_health_callback') and self.connection_health_callback:
+                self.transcription_provider.set_connection_health_callback(self.connection_health_callback)
+                logger.info("🔍 AudioProcessor: Connection health monitoring enabled")
             
             logger.info("Audio processor initialized successfully")
             
@@ -313,6 +319,14 @@ class AudioProcessor:
     def set_error_callback(self, callback: Callable[[Exception], None]) -> None:
         """Set callback function for error handling."""
         self.error_callback = callback
+    
+    def set_connection_health_callback(self, callback: Callable[[bool, str], None]) -> None:
+        """Set callback for connection health notifications.
+        
+        Args:
+            callback: Function to call with (is_healthy, message) when connection status changes
+        """
+        self.connection_health_callback = callback
     
     def get_available_devices(self) -> Dict[int, str]:
         """Get list of available audio input devices."""

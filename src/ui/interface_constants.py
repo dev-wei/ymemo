@@ -22,6 +22,8 @@ BUTTON_TEXT = {
     "start_recording": "🎤 Start Recording",
     "stop_recording": "⏹️ Stop Recording",
     "save_meeting": "💾 Save as New Meeting",
+    "download_transcript": "📄 Download Transcript",
+    "clear_dialog": "🗑️ Clear",
     "starting": "🔄 Starting...",
     "stopping": "⏳ Stopping...",
     "refresh_devices": "🔄 Refresh Devices"
@@ -39,8 +41,7 @@ UI_TEXT = {
 # Placeholder text constants
 PLACEHOLDER_TEXT = {
     "meeting_name": "Enter meeting name...",
-    "transcription_dialog": "Transcription will appear here when recording starts...",
-    "live_transcription": "Transcription will appear here..."
+    "transcription_dialog": "Transcription will appear here when recording starts..."
 }
 
 # UI dimensions
@@ -58,7 +59,6 @@ TABLE_HEADERS = {
 FORM_LABELS = {
     "meeting_name": "Meeting Name",
     "duration": "Duration",
-    "live_transcription": "Live Transcription",
     "audio_device": "Audio Device",
     "status": "Status"
 }

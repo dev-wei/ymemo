@@ -9,6 +9,7 @@ from datetime import datetime
 from ..core.processor import AudioProcessor
 from ..core.interfaces import TranscriptionResult
 from ..utils.exceptions import SessionManagerError
+from ..utils.status_manager import status_manager
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,9 @@ class AudioSessionManager:
         self.session_start_time = None
         self.session_end_time = None
         
+        # Connection health tracking
+        self.transcription_connected = True
+        
     def add_transcription_callback(self, callback: Callable[[dict], None]) -> None:
         """Add a callback for transcription updates."""
         with self._session_lock:
@@ -83,23 +87,38 @@ class AudioSessionManager:
             
             # Smart partial result handling
             if result.is_partial and result.utterance_id:
+                logger.info(f"🔄 Processing partial result: utterance={result.utterance_id}, text='{result.text}'")
                 # Check if we already have a partial result for this utterance
                 if result.utterance_id in self.active_partial_results:
                     # Update existing partial result
                     existing_index = self.active_partial_results[result.utterance_id]
+                    logger.info(f"🔄 Found existing partial at index {existing_index}")
+                    
                     if existing_index < len(self.current_transcriptions):
-                        self.current_transcriptions[existing_index] = message
-                        logger.debug(f"📝 Updated partial result for utterance {result.utterance_id} at index {existing_index}")
+                        # Verify the utterance_id matches (more reliable than content matching)
+                        existing_utterance_id = self.current_transcriptions[existing_index].get('utterance_id', '')
+                        
+                        if existing_utterance_id == result.utterance_id:
+                            self.current_transcriptions[existing_index] = message
+                            logger.info(f"✅ Updated partial result for {result.utterance_id} at index {existing_index}")
+                        else:
+                            # Utterance ID doesn't match - index is wrong, add new message
+                            existing_content = self.current_transcriptions[existing_index].get('content', '')
+                            logger.info(f"❌ Utterance ID mismatch at index {existing_index}: found '{existing_utterance_id}' vs expected '{result.utterance_id}', content: '{existing_content[:50]}...'")
+                            self.current_transcriptions.append(message)
+                            self.active_partial_results[result.utterance_id] = len(self.current_transcriptions) - 1
+                            logger.info(f"📝 Added new partial result for {result.utterance_id} due to index corruption")
                     else:
                         # Index is out of bounds, add new message
+                        logger.info(f"❌ Index {existing_index} out of bounds (list length: {len(self.current_transcriptions)})")
                         self.current_transcriptions.append(message)
                         self.active_partial_results[result.utterance_id] = len(self.current_transcriptions) - 1
-                        logger.debug(f"📝 Added new partial result for utterance {result.utterance_id}")
+                        logger.info(f"📝 Added new partial result for {result.utterance_id} due to out-of-bounds index")
                 else:
                     # New partial result
                     self.current_transcriptions.append(message)
                     self.active_partial_results[result.utterance_id] = len(self.current_transcriptions) - 1
-                    logger.debug(f"📝 Added new partial result for utterance {result.utterance_id}")
+                    logger.info(f"📝 Added new partial result for {result.utterance_id}")
             else:
                 # Final result or no utterance tracking
                 if result.utterance_id and result.utterance_id in self.active_partial_results:
@@ -122,13 +141,41 @@ class AudioSessionManager:
             
             # Keep only last 100 messages to prevent memory issues
             if len(self.current_transcriptions) > 100:
+                logger.info(f"🔄 TRUNCATION: {len(self.current_transcriptions)} transcriptions, truncating to 100")
+                logger.info(f"🔄 Active partials before truncation: {self.active_partial_results}")
+                
+                # Calculate how many items we're removing from the front
+                items_to_remove = len(self.current_transcriptions) - 100
+                logger.info(f"🔄 Removing {items_to_remove} items from front of list")
+                
+                # Truncate the list
                 self.current_transcriptions = self.current_transcriptions[-100:]
+                
                 # Update partial result indices after truncation
-                self.active_partial_results = {
-                    utterance_id: max(0, index - (len(self.current_transcriptions) - 100))
-                    for utterance_id, index in self.active_partial_results.items()
-                    if index >= (len(self.current_transcriptions) - 100)
-                }
+                # OLD BUGGY LOGIC: index - (len(self.current_transcriptions) - 100)
+                # NEW CORRECT LOGIC: index - items_to_remove
+                old_active_partials = self.active_partial_results.copy()
+                self.active_partial_results = {}
+                
+                for utterance_id, old_index in old_active_partials.items():
+                    new_index = old_index - items_to_remove
+                    logger.info(f"🔄 Adjusting {utterance_id}: old_index={old_index}, new_index={new_index}")
+                    
+                    # Only keep partials that are still within bounds after truncation
+                    if new_index >= 0 and new_index < len(self.current_transcriptions):
+                        # Verify the utterance_id matches to ensure index is still valid
+                        actual_utterance_id = self.current_transcriptions[new_index].get('utterance_id', '')
+                        
+                        if actual_utterance_id == utterance_id:
+                            self.active_partial_results[utterance_id] = new_index
+                            logger.info(f"✅ Kept {utterance_id} at corrected index {new_index}")
+                        else:
+                            actual_content = self.current_transcriptions[new_index].get('content', '')
+                            logger.info(f"❌ Dropping {utterance_id} - utterance ID mismatch at index {new_index}: found '{actual_utterance_id}', content: '{actual_content[:50]}...'")
+                    else:
+                        logger.info(f"❌ Dropping {utterance_id} - index {new_index} out of bounds")
+                
+                logger.info(f"🔄 Active partials after truncation: {self.active_partial_results}")
             
             logger.debug(f"💾 Total transcriptions stored: {len(self.current_transcriptions)}, active partials: {len(self.active_partial_results)}")
             
@@ -140,6 +187,25 @@ class AudioSessionManager:
                     logger.debug(f"✅ Callback #{i+1} executed successfully")
                 except Exception as e:
                     logger.error(f"❌ Error in callback #{i+1}: {e}")
+    
+    def _on_connection_health_changed(self, is_healthy: bool, message: str) -> None:
+        """Handle connection health status changes."""
+        with self._session_lock:
+            logger.info(f"🔍 SessionManager: Connection health changed - healthy: {is_healthy}, message: '{message}'")
+            
+            if is_healthy != self.transcription_connected:
+                self.transcription_connected = is_healthy
+                
+                if is_healthy:
+                    # Connection recovered
+                    logger.info("✅ SessionManager: Transcription connection recovered")
+                    if self.is_recording():
+                        status_manager.set_recording()
+                else:
+                    # Connection lost
+                    logger.warning("⚠️ SessionManager: Transcription connection lost")
+                    if self.is_recording():
+                        status_manager.set_transcription_disconnected(message)
     
     def _run_audio_processor_async(self, device_index: int) -> None:
         """Run audio processor in background thread."""
@@ -211,7 +277,8 @@ class AudioSessionManager:
                 
                 # Set up callbacks
                 self.audio_processor.set_transcription_callback(self._on_transcription_received)
-                logger.debug("✅ SessionManager: Transcription callback set")
+                self.audio_processor.set_connection_health_callback(self._on_connection_health_changed)
+                logger.debug("✅ SessionManager: Transcription and connection health callbacks set")
                 
                 # Start recording in background thread
                 self.background_thread = threading.Thread(

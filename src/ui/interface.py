@@ -20,7 +20,8 @@ from .interface_styles import APP_CSS, APP_JS
 from .interface_handlers import (
     refresh_devices, start_recording, stop_recording, handle_transcription_update,
     get_latest_dialog_state, conditional_update, open_save_panel, save_meeting,
-    immediate_transcription_update, setup_save_callback, get_device_choices_and_default
+    immediate_transcription_update, setup_save_callback, get_device_choices_and_default,
+    download_transcript, update_download_button_visibility, create_download_button, clear_dialog
 )
 
 logger = logging.getLogger(__name__)
@@ -84,8 +85,8 @@ def get_button_states(status: AudioStatus) -> dict:
             }
         }
     
-    elif status in [AudioStatus.RECORDING, AudioStatus.TRANSCRIBING]:
-        # Recording in progress
+    elif status in [AudioStatus.RECORDING, AudioStatus.TRANSCRIBING, AudioStatus.TRANSCRIPTION_DISCONNECTED, AudioStatus.RECONNECTING]:
+        # Recording in progress (including disconnected transcription and reconnection attempts)
         return {
             "start_btn": {
                 "text": BUTTON_TEXT["start_recording"],
@@ -308,14 +309,14 @@ def create_controls():
         gr.Markdown(UI_TEXT["audio_controls_title"])
         
         # Audio device selection
-        device_choices, initial_device = get_device_choices_and_default()
+        device_choices, initial_device_index = get_device_choices_and_default()
         
         device_dropdown = gr.Dropdown(
             label=FORM_LABELS["audio_device"],
             choices=device_choices,
-            value=initial_device,
+            value=initial_device_index,
             interactive=True,
-            allow_custom_value=True
+            allow_custom_value=False  # Disable custom values to prevent invalid indices
         )
         
         # Device refresh button
@@ -357,16 +358,14 @@ def create_controls():
             interactive=initial_button_states["save_btn"]["interactive"]
         )
         
-        # Live transcription display
-        live_text = gr.Textbox(
-            label=FORM_LABELS["live_transcription"],
-            lines=10,
-            max_lines=15,
-            interactive=False,
-            placeholder=PLACEHOLDER_TEXT["live_transcription"]
+        # Download transcript button
+        download_transcript_btn = gr.DownloadButton(
+            label=BUTTON_TEXT["download_transcript"],
+            variant="secondary",
+            visible=False  # Initially hidden until transcript is available
         )
         
-        return device_dropdown, refresh_btn, status_text, start_btn, stop_btn, save_meeting_btn, live_text
+        return device_dropdown, refresh_btn, status_text, start_btn, stop_btn, save_meeting_btn, download_transcript_btn
 
 
 def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
@@ -409,7 +408,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             meeting_name_field, duration_field, dialog_output = create_dialog_panel()
             
             # Right panel - Audio Controls
-            device_dropdown, refresh_btn, status_text, start_btn, stop_btn, save_meeting_btn, live_text = create_controls()
+            device_dropdown, refresh_btn, status_text, start_btn, stop_btn, save_meeting_btn, download_transcript_btn = create_controls()
         
         # Save panel components removed during cleanup
         
@@ -544,10 +543,35 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             outputs=[status_text, start_btn, stop_btn, save_meeting_btn]
         )
         
-        # Timer for dialog updates only (not button updates)
+        # Combined update function for dialog and download button
+        def combined_update():
+            """Update both dialog and download button visibility."""
+            dialog_state_result, dialog_output_result = conditional_update()
+            download_button_result = update_download_button_visibility()
+            return dialog_state_result, dialog_output_result, download_button_result
+        
+        # Timer for dialog and download button updates
         timer.tick(
-            fn=conditional_update,
-            outputs=[dialog_state, dialog_output]
+            fn=combined_update,
+            outputs=[dialog_state, dialog_output, download_transcript_btn]
+        )
+        
+        # Download transcript button - following the working Gradio pattern
+        def handle_download_click():
+            """Handle download button click - generate file and return DownloadButton with value."""
+            file_path = download_transcript()
+            return create_download_button(file_path)
+        
+        download_transcript_btn.click(
+            fn=handle_download_click,
+            outputs=[download_transcript_btn]
+        )
+        
+        # Clear dialog functionality - wire up chatbot's built-in clear event
+        dialog_output.clear(
+            fn=clear_dialog,
+            outputs=[dialog_state, dialog_output],
+            queue=False  # Immediate response for clearing
         )
         
         # Save panel functionality

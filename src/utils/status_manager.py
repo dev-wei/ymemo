@@ -17,6 +17,8 @@ class AudioStatus(Enum):
     CONNECTING = "connecting"
     RECORDING = "recording"
     TRANSCRIBING = "transcribing"
+    TRANSCRIPTION_DISCONNECTED = "transcription_disconnected"
+    RECONNECTING = "reconnecting"
     STOPPING = "stopping"
     STOPPED = "stopped"
     ERROR = "error"
@@ -43,6 +45,8 @@ class AudioStatusManager:
         AudioStatus.CONNECTING: "Connecting to transcription service...",
         AudioStatus.RECORDING: "Recording audio...",
         AudioStatus.TRANSCRIBING: "Processing speech...",
+        AudioStatus.TRANSCRIPTION_DISCONNECTED: "⚠️ Transcription disconnected - audio recording continues",
+        AudioStatus.RECONNECTING: "🔄 Reconnecting to transcription service...",
         AudioStatus.STOPPING: "Stopping recording...",
         AudioStatus.STOPPED: "Recording stopped",
         AudioStatus.ERROR: "Error occurred"
@@ -272,6 +276,24 @@ class AudioStatusManager:
     def set_stopped(self) -> None:
         """Set status to stopped."""
         self.set_status(AudioStatus.STOPPED)
+    
+    def set_transcription_disconnected(self, message: Optional[str] = None) -> None:
+        """Set status to transcription disconnected.
+        
+        Args:
+            message: Optional custom message about the disconnection
+        """
+        status_message = message or self.STATUS_MESSAGES[AudioStatus.TRANSCRIPTION_DISCONNECTED]
+        self.set_status(AudioStatus.TRANSCRIPTION_DISCONNECTED, status_message)
+    
+    def set_reconnecting(self, attempt: int = 1) -> None:
+        """Set status to reconnecting.
+        
+        Args:
+            attempt: Reconnection attempt number
+        """
+        status_message = f"🔄 Reconnecting to transcription service... (attempt {attempt})"
+        self.set_status(AudioStatus.RECONNECTING, status_message)
     
     def set_error(self, error: Exception, message: Optional[str] = None) -> None:
         """Set status to error.
