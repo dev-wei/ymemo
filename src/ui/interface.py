@@ -15,7 +15,7 @@ from .interface_utils import load_meetings_data, refresh_meetings_list, save_mee
 from .interface_constants import (
     AVAILABLE_THEMES, DEFAULT_THEME, BUTTON_TEXT, UI_TEXT, PLACEHOLDER_TEXT,
     UI_DIMENSIONS, TABLE_HEADERS, FORM_LABELS, DEFAULT_VALUES, AUDIO_CONFIG,
-    COPY_CONFIG
+    COPY_CONFIG, DURATION_FORMAT
 )
 from .interface_styles import APP_CSS, APP_JS
 from .interface_handlers import (
@@ -23,7 +23,7 @@ from .interface_handlers import (
     get_latest_dialog_state, conditional_update, open_save_panel, save_meeting,
     immediate_transcription_update, setup_save_callback, get_device_choices_and_default,
     download_transcript, update_download_button_visibility, create_download_button, clear_dialog,
-    handle_copy_event
+    handle_copy_event, get_current_duration_display, reset_meeting_duration
 )
 
 logger = logging.getLogger(__name__)
@@ -548,17 +548,18 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             outputs=[status_text, start_btn, stop_btn, save_meeting_btn]
         )
         
-        # Combined update function for dialog and download button
+        # Combined update function for dialog, download button, and duration
         def combined_update():
-            """Update both dialog and download button visibility."""
+            """Update dialog, download button visibility, and duration display."""
             dialog_state_result, dialog_output_result = conditional_update()
             download_button_result = update_download_button_visibility()
-            return dialog_state_result, dialog_output_result, download_button_result
+            duration_display_result = get_current_duration_display()
+            return dialog_state_result, dialog_output_result, download_button_result, duration_display_result
         
-        # Timer for dialog and download button updates
+        # Timer for dialog, download button, and duration updates  
         timer.tick(
             fn=combined_update,
-            outputs=[dialog_state, dialog_output, download_transcript_btn]
+            outputs=[dialog_state, dialog_output, download_transcript_btn, duration_field]
         )
         
         # Download transcript button - following the working Gradio pattern

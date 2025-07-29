@@ -45,9 +45,15 @@ class AudioSessionManager:
         self.active_partial_results: dict = {}  # utterance_id -> message_index
         self.partial_result_timeout = 2.0  # seconds
         
-        # Session timing
+        # Session timing - legacy fields kept for compatibility
         self.session_start_time = None
         self.session_end_time = None
+        
+        # Enhanced duration tracking
+        self.total_duration_seconds = 0.0  # Accumulated time across all recording segments
+        self.current_segment_start_time = None  # Start of current recording segment
+        self.recording_segments = []  # List of {'start': datetime, 'end': datetime, 'duration': float}
+        self.last_update_time = None  # For real-time duration calculation
         
         # Connection health tracking
         self.transcription_connected = True
@@ -255,7 +261,15 @@ class AudioSessionManager:
                 
                 # Clear partial results but preserve transcriptions for multi-recording
                 self.active_partial_results.clear()
-                self.session_start_time = datetime.now()
+                
+                # Enhanced duration tracking - start new recording segment
+                current_time = datetime.now()
+                self.current_segment_start_time = current_time
+                self.last_update_time = current_time
+                
+                # Update legacy fields for compatibility
+                if self.session_start_time is None:
+                    self.session_start_time = current_time  # Only set on first recording
                 self.session_end_time = None
                 
                 logger.info(f"🎤 SessionManager: Preserving {len(self.current_transcriptions)} existing transcriptions")
@@ -402,7 +416,29 @@ class AudioSessionManager:
                 
                 self.audio_processor = None
                 self.background_loop = None
-                self.session_end_time = datetime.now()
+                
+                # Enhanced duration tracking - complete current segment
+                current_time = datetime.now()
+                if self.current_segment_start_time:
+                    segment_duration = (current_time - self.current_segment_start_time).total_seconds()
+                    self.total_duration_seconds += segment_duration
+                    
+                    # Record the segment
+                    segment_info = {
+                        'start': self.current_segment_start_time,
+                        'end': current_time, 
+                        'duration': segment_duration
+                    }
+                    self.recording_segments.append(segment_info)
+                    
+                    logger.info(f"🎤 SessionManager: Completed recording segment - Duration: {segment_duration:.1f}s, Total: {self.total_duration_seconds:.1f}s")
+                    
+                    # Clear current segment tracking
+                    self.current_segment_start_time = None
+                    self.last_update_time = None
+                
+                # Update legacy field for compatibility  
+                self.session_end_time = current_time
                 logger.info("✅ SessionManager: Recording stopped successfully")
                 return True
                 
@@ -432,7 +468,7 @@ class AudioSessionManager:
     def get_session_info(self) -> dict:
         """Get current session information."""
         with self._session_lock:
-            # Calculate duration
+            # Calculate duration (legacy method for compatibility)
             duration = 0.0
             if self.session_start_time:
                 end_time = self.session_end_time or datetime.now()
@@ -442,10 +478,61 @@ class AudioSessionManager:
                 'is_recording': self.is_recording(),
                 'transcription_count': len(self.current_transcriptions),
                 'callbacks_registered': len(self.transcription_callbacks),
-                'duration': duration,
+                'duration': duration,  # Legacy duration in minutes
+                'current_duration_seconds': self.get_current_duration_seconds(),  # Enhanced duration
                 'start_time': self.session_start_time,
                 'end_time': self.session_end_time
             }
+    
+    def get_current_duration_seconds(self) -> float:
+        """Get current total duration in seconds (accumulated + current segment)."""
+        with self._session_lock:
+            total_duration = self.total_duration_seconds
+            
+            # Add current recording segment duration if recording
+            if self.current_segment_start_time:
+                current_segment_duration = (datetime.now() - self.current_segment_start_time).total_seconds()
+                total_duration += current_segment_duration
+            
+            return total_duration
+    
+    def get_formatted_duration(self) -> str:
+        """Get formatted duration string (MM:SS or HH:MM:SS)."""
+        total_seconds = self.get_current_duration_seconds()
+        return self.format_duration_seconds(total_seconds)
+    
+    def format_duration_seconds(self, total_seconds: float) -> str:
+        """Format seconds as MM:SS or HH:MM:SS string."""
+        if total_seconds < 0:
+            total_seconds = 0
+        
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        seconds = int(total_seconds % 60)
+        
+        if hours > 0:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        else:
+            return f"{minutes:02d}:{seconds:02d}"
+    
+    def reset_duration_tracking(self) -> None:
+        """Reset all duration tracking for a new meeting."""
+        with self._session_lock:
+            self.total_duration_seconds = 0.0
+            self.current_segment_start_time = None
+            self.recording_segments.clear()
+            self.last_update_time = None
+            
+            # Reset legacy fields
+            self.session_start_time = None
+            self.session_end_time = None
+            
+            logger.info("🔄 Duration tracking reset for new meeting")
+    
+    def get_recording_segments(self) -> List[dict]:
+        """Get list of recording segments for analytics."""
+        with self._session_lock:
+            return self.recording_segments.copy()
 
 
 # Convenience function to get the singleton instance

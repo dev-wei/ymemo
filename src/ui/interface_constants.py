@@ -63,9 +63,17 @@ FORM_LABELS = {
     "status": "Status"
 }
 
+# Duration formatting
+DURATION_FORMAT = {
+    "default_display": "00:00",
+    "zero_display": "00:00", 
+    "separator": ":",
+    "show_hours_threshold": 3600  # Show hours when duration >= 1 hour
+}
+
 # Default values
 DEFAULT_VALUES = {
-    "duration_display": "0.0 min",
+    "duration_display": DURATION_FORMAT["default_display"],
     "no_devices": "No devices"
 }
 

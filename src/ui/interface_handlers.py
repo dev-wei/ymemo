@@ -631,3 +631,65 @@ def handle_copy_event(copy_data):
         logger.error(f"❌ Error handling copy event: {e}")
         # Return original value even on error
         return copy_data.value if hasattr(copy_data, 'value') else ""
+
+
+def get_current_duration_display():
+    """Get formatted current duration for display."""
+    try:
+        audio_session = get_audio_session()
+        formatted_duration = audio_session.get_formatted_duration()
+        
+        logger.debug(f"⏱️ Duration display: {formatted_duration}")
+        return formatted_duration
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting duration display: {e}")
+        from .interface_constants import DURATION_FORMAT
+        return DURATION_FORMAT["default_display"]
+
+
+def reset_meeting_duration():
+    """Reset duration tracking for a new meeting."""
+    try:
+        logger.info("🔄 Reset meeting duration requested")
+        
+        audio_session = get_audio_session()
+        audio_session.reset_duration_tracking()
+        
+        logger.info("✅ Meeting duration reset successfully")
+        
+        # Return updated duration display
+        return get_current_duration_display()
+        
+    except Exception as e:
+        logger.error(f"❌ Error resetting meeting duration: {e}")
+        from .interface_constants import DURATION_FORMAT
+        return DURATION_FORMAT["default_display"]
+
+
+def get_duration_analytics():
+    """Get duration analytics for current session."""
+    try:
+        audio_session = get_audio_session()
+        
+        analytics = {
+            'total_duration_seconds': audio_session.get_current_duration_seconds(),
+            'total_duration_formatted': audio_session.get_formatted_duration(),
+            'recording_segments': audio_session.get_recording_segments(),
+            'segment_count': len(audio_session.get_recording_segments()),
+            'is_recording': audio_session.is_recording()
+        }
+        
+        logger.info(f"📊 Duration analytics: {analytics['total_duration_formatted']} across {analytics['segment_count']} segments")
+        
+        return analytics
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting duration analytics: {e}")
+        return {
+            'total_duration_seconds': 0.0,
+            'total_duration_formatted': "00:00",
+            'recording_segments': [],
+            'segment_count': 0,
+            'is_recording': False
+        }
