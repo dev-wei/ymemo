@@ -267,7 +267,11 @@ def create_meeting_list():
                 headers=TABLE_HEADERS["meeting_list"],
                 datatype=["str", "str", "str", "str"],
                 value=load_meetings_data(),
-                interactive=True
+                interactive=False,           # Disable cell/row editing
+                show_search="search",        # Enable search functionality
+                show_fullscreen_button=True, # Allow fullscreen viewing  
+                show_copy_button=True,       # Enable copying data
+                wrap=True                    # Enable text wrapping if needed
             )
             return meeting_list
 
