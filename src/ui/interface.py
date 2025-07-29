@@ -20,8 +20,8 @@ from .interface_constants import (
 from .interface_styles import APP_CSS, APP_JS
 from .interface_handlers import (
     refresh_devices, start_recording, stop_recording, handle_transcription_update,
-    get_latest_dialog_state, conditional_update, open_save_panel, save_meeting,
-    immediate_transcription_update, setup_save_callback, get_device_choices_and_default,
+    get_latest_dialog_state, conditional_update, submit_new_meeting,
+    immediate_transcription_update, get_device_choices_and_default,
     download_transcript, update_download_button_visibility, create_download_button, clear_dialog,
     handle_copy_event, get_current_duration_display, reset_meeting_duration
 )
@@ -415,45 +415,9 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             # Right panel - Audio Controls
             device_dropdown, refresh_btn, status_text, start_btn, stop_btn, save_meeting_btn, download_transcript_btn = create_controls()
         
-        # Save panel components removed during cleanup
-        
-        # Hidden components for backend data handling (keep for compatibility)
-        meeting_name_input = gr.Textbox(
-            label="Meeting Name",
-            placeholder="Enter meeting name...",
-            value="",
-            visible=False
-        )
-        
-        current_date = gr.Textbox(
-            label="Date",
-            value=datetime.now().strftime("%Y-%m-%d"),
-            interactive=False,
-            visible=False
-        )
-        
-        transcription_preview = gr.Textbox(
-            label="Transcription",
-            lines=5,
-            max_lines=10,
-            interactive=False,
-            placeholder="Transcription will appear here...",
-            visible=False
-        )
-        
-        duration_display = gr.Textbox(
-            label="Duration",
-            value="0.0 min",
-            interactive=False,
-            visible=False
-        )
-        
-        save_status = gr.Textbox(
-            label="Status",
-            value="",
-            interactive=False,
-            visible=False
-        )
+        # Status message component for user feedback (placed near save button)
+        with gr.Row():
+            save_status_message = gr.HTML(visible=False)
         
         # Get audio session manager
         audio_session = get_audio_session()
@@ -586,164 +550,16 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             queue=False  # Immediate response for copying
         )
         
-        # Save panel functionality
-        def open_save_panel():
-            """Open the save meeting panel with current recording data."""
-            try:
-                logger.info("🔓 Save panel button clicked")
-                
-                # Get current transcription from session manager
-                current_transcriptions = audio_session.get_current_transcriptions()
-                
-                # Combine all transcriptions into one text
-                current_transcription = ""
-                if current_transcriptions:
-                    transcription_parts = []
-                    for msg in current_transcriptions:
-                        transcription_parts.append(msg["content"])
-                    current_transcription = "\n".join(transcription_parts)
-                
-                # Get session info for duration
-                session_info = audio_session.get_session_info()
-                duration = session_info.get('duration', 0.0)
-                
-                # Format duration for display
-                duration_str = f"{duration:.1f} min" if duration > 0 else "0.0 min"
-                
-                logger.info(f"✅ Opening save panel with {len(current_transcriptions)} transcriptions")
-                logger.info(f"✅ Transcription preview: {current_transcription[:100]}...")
-                logger.info(f"✅ Duration string: {duration_str}")
-                
-                # Generate a meaningful default meeting name
-                from datetime import datetime
-                default_name = f"Meeting {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-                
-                # Update hidden form fields for backend processing
-                meeting_name_input.value = default_name
-                current_date.value = datetime.now().strftime("%Y-%m-%d")
-                transcription_preview.value = current_transcription
-                duration_display.value = duration_str
-                
-                # Return JavaScript to show panel and populate form
-                return gr.HTML(f"""
-                    <script>
-                        setTimeout(function() {{
-                            showSavePanel();
-                            populateSavePanel('{default_name}', '{datetime.now().strftime("%Y-%m-%d")}', '{duration_str}', {repr(current_transcription)});
-                            hideSaveStatus();
-                        }}, 100);
-                    </script>
-                """)
-                
-            except Exception as e:
-                logger.error(f"❌ Error opening save panel: {e}")
-                import traceback
-                traceback.print_exc()
-                return gr.HTML(f"""
-                    <script>
-                        setTimeout(function() {{
-                            showSaveStatus('Error: {str(e)}', true);
-                        }}, 100);
-                    </script>
-                """)
-        
-        def save_meeting(meeting_name, transcription, duration_str):
-            """Save the meeting to database."""
-            try:
-                logger.info(f"💾 Saving meeting: '{meeting_name}', duration: '{duration_str}'")
-                logger.info(f"💾 Transcription length: {len(transcription)} characters")
-                
-                # Parse duration from string
-                duration = float(duration_str.replace(" min", "").replace(" sec", ""))
-                logger.info(f"💾 Parsed duration: {duration}")
-                
-                # Save to database
-                success, message = save_meeting_to_database(
-                    meeting_name=meeting_name,
-                    duration=duration,
-                    transcription=transcription,
-                    audio_file_path=None  # TODO: Add audio file path when available
-                )
-                
-                logger.info(f"💾 Save result: success={success}, message='{message}'")
-                
-                if success:
-                    # Close panel and refresh meeting list
-                    return (
-                        gr.update(value=load_meetings_data()),  # meeting_list
-                        gr.HTML(f"""
-                            <script>
-                                setTimeout(function() {{
-                                    hideSavePanel();
-                                    showSaveStatus('{message}', false);
-                                }}, 100);
-                            </script>
-                        """)
-                    )
-                else:
-                    # Show error but keep panel open
-                    return (
-                        gr.update(),  # meeting_list (no change)
-                        gr.HTML(f"""
-                            <script>
-                                setTimeout(function() {{
-                                    showSaveStatus('{message}', true);
-                                }}, 100);
-                            </script>
-                        """)
-                    )
-                    
-            except Exception as e:
-                logger.error(f"Error saving meeting: {e}")
-                return (
-                    gr.update(),  # meeting_list (no change)
-                    gr.HTML(f"""
-                        <script>
-                            setTimeout(function() {{
-                                showSaveStatus('Error: {str(e)}', true);
-                            }}, 100);
-                        </script>
-                    """)
-                )
-        
-        
-        # Save panel functionality removed during cleanup
-        
-        # Create a hidden component for JavaScript callbacks
-        js_callback_output = gr.HTML(visible=False)
-        
-        # Set up JavaScript callback for save action
-        def setup_save_callback():
-            return gr.HTML("""
-                <script>
-                    window.gradioSaveMeeting = function(meetingName, transcription, duration) {
-                        // Find the save button in Gradio and trigger it
-                        const saveBtn = document.querySelector('#save-meeting-trigger');
-                        if (saveBtn) {
-                            // Update hidden inputs with form data
-                            const nameInput = document.querySelector('#meeting-name-input textarea');
-                            const transcInput = document.querySelector('#transcription-preview textarea');
-                            const durationInput = document.querySelector('#duration-display textarea');
-                            
-                            if (nameInput) nameInput.value = meetingName;
-                            if (transcInput) transcInput.value = transcription;
-                            if (durationInput) durationInput.value = duration;
-                            
-                            saveBtn.click();
-                        }
-                    };
-                </script>
-            """)
-        
-        # Create hidden save trigger button
-        save_trigger_btn = gr.Button("Save", visible=False, elem_id="save-meeting-trigger")
-        save_trigger_btn.click(
-            fn=save_meeting,
-            inputs=[meeting_name_input, transcription_preview, duration_display],
-            outputs=[meeting_list, js_callback_output]
+        # Direct save functionality (replaces old sliding panel system)
+        save_meeting_btn.click(
+            fn=submit_new_meeting,
+            inputs=[meeting_name_field, duration_field, dialog_output],
+            outputs=[save_status_message, meeting_list]
+        ).then(
+            # Show the status message after submission
+            fn=lambda: gr.update(visible=True),
+            outputs=[save_status_message]
         )
-        
-        # Setup callback removed during cleanup
         
         # Note: Removed automatic button updates to prevent interference with clicks
         # Buttons are updated manually in the event handlers when needed

@@ -341,122 +341,162 @@ def conditional_update():
         return gr.skip(), gr.skip()
 
 
-# Save Meeting Handlers
-def open_save_panel():
-    """Open the save meeting panel with current recording data."""
+# Direct Save Meeting Handler
+def submit_new_meeting(meeting_name, duration_display, dialog_messages):
+    """Submit a new meeting directly to database with validation."""
     try:
-        logger.info("🔓 Save panel button clicked")
+        logger.info(f"💾 Submitting new meeting: '{meeting_name}', duration: '{duration_display}'")
         
-        # Get audio session manager
-        audio_session = get_audio_session()
+        # Validation - Meeting name cannot be empty
+        if not meeting_name or not meeting_name.strip():
+            error_msg = "Meeting name cannot be empty"
+            logger.warning(f"❌ Validation failed: {error_msg}")
+            return create_error_message(error_msg)
         
-        # Get current transcription from session manager
-        current_transcriptions = audio_session.get_current_transcriptions()
+        # Extract transcription from dialog messages
+        transcription_text = extract_transcription_from_dialog(dialog_messages)
+        logger.info(f"💾 Extracted transcription length: {len(transcription_text)} characters")
         
-        # Combine all transcriptions into one text
-        current_transcription = ""
-        if current_transcriptions:
-            transcription_parts = []
-            for msg in current_transcriptions:
-                transcription_parts.append(msg["content"])
-            current_transcription = "\n".join(transcription_parts)
+        # Parse duration (from "MM:SS" or "HH:MM:SS" format to float minutes)
+        duration_minutes = parse_duration_to_minutes(duration_display)
+        logger.info(f"💾 Parsed duration: {duration_minutes} minutes")
         
-        # Get session info for duration
-        session_info = audio_session.get_session_info()
-        duration = session_info.get('duration', 0.0)
+        # Validation - Duration should be > 0 (but allow saving empty recordings with warning)
+        if duration_minutes <= 0:
+            warning_msg = "No recording duration found, but saving anyway"
+            logger.warning(f"⚠️ {warning_msg}")
         
-        # Format duration for display
-        duration_str = f"{duration:.1f} min" if duration > 0 else "0.0 min"
-        
-        logger.info(f"✅ Opening save panel with {len(current_transcriptions)} transcriptions")
-        logger.info(f"✅ Transcription preview: {current_transcription[:100]}...")
-        logger.info(f"✅ Duration string: {duration_str}")
-        
-        # Generate a meaningful default meeting name
-        default_name = f"Meeting {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        
-        # Return JavaScript to show panel and populate form
-        return gr.HTML(f"""
-            <script>
-                setTimeout(function() {{
-                    showSavePanel();
-                    populateSavePanel('{default_name}', '{datetime.now().strftime("%Y-%m-%d")}', '{duration_str}', {repr(current_transcription)});
-                    hideSaveStatus();
-                }}, 100);
-            </script>
-        """)
-        
-    except Exception as e:
-        logger.error(f"❌ Error opening save panel: {e}")
-        import traceback
-        traceback.print_exc()
-        return gr.HTML(f"""
-            <script>
-                setTimeout(function() {{
-                    showSaveStatus('Error: {str(e)}', true);
-                }}, 100);
-            </script>
-        """)
-
-
-def save_meeting(meeting_name, transcription, duration_str):
-    """Save the meeting to database."""
-    try:
-        logger.info(f"💾 Saving meeting: '{meeting_name}', duration: '{duration_str}'")
-        logger.info(f"💾 Transcription length: {len(transcription)} characters")
-        
-        # Parse duration from string
-        duration = float(duration_str.replace(" min", "").replace(" sec", ""))
-        logger.info(f"💾 Parsed duration: {duration}")
+        # Validation - Warn if transcription is empty but allow saving
+        if not transcription_text.strip():
+            logger.warning("⚠️ Empty transcription, but saving anyway")
         
         # Save to database
         success, message = save_meeting_to_database(
-            meeting_name=meeting_name,
-            duration=duration,
-            transcription=transcription,
-            audio_file_path=None  # TODO: Add audio file path when available
+            meeting_name=meeting_name.strip(),
+            duration=duration_minutes,
+            transcription=transcription_text,
+            audio_file_path=None  # As specified - keep empty for now
         )
         
         logger.info(f"💾 Save result: success={success}, message='{message}'")
         
         if success:
-            # Close panel and refresh meeting list
-            return (
-                gr.update(value=load_meetings_data()),  # meeting_list
-                gr.HTML(f"""
-                    <script>
-                        setTimeout(function() {{
-                            hideSavePanel();
-                            showSaveStatus('{message}', false);
-                        }}, 100);
-                    </script>
-                """)
-            )
+            success_msg = f"Meeting '{meeting_name.strip()}' saved successfully! ℹ️"
+            logger.info(f"✅ {success_msg}")
+            
+            # Show Gradio info notification
+            gr.Info(success_msg, duration=5)
+            
+            # Refresh meeting list data
+            refreshed_meetings = load_meetings_data()
+            logger.info(f"📋 Refreshed meeting list with {len(refreshed_meetings)} meetings")
+            
+            # Return empty status message and refreshed meeting list
+            return gr.HTML(""), refreshed_meetings
         else:
-            # Show error but keep panel open
-            return (
-                gr.update(),  # meeting_list (no change)
-                gr.HTML(f"""
-                    <script>
-                        setTimeout(function() {{
-                            showSaveStatus('{message}', true);
-                        }}, 100);
-                    </script>
-                """)
-            )
+            error_msg = f"Failed to save meeting: {message}"
+            logger.error(f"❌ {error_msg}")
+            # Keep existing meeting list unchanged on error
+            return create_error_message(error_msg), gr.update()
             
     except Exception as e:
-        logger.error(f"Error saving meeting: {e}")
-        return (
-            gr.update(),  # meeting_list (no change)
-            gr.HTML(f"""
-                <script>
-                    setTimeout(function() {{
-                        showSaveStatus('Error: {str(e)}', true);
-                    }}, 100);
-                </script>
-            """)
-        )
+        error_msg = f"Unexpected error: {str(e)}"
+        logger.error(f"❌ Error submitting meeting: {e}", exc_info=True)
+        # Keep existing meeting list unchanged on error
+        return create_error_message(error_msg), gr.update()
+
+
+# Helper Functions for Message Creation and Data Parsing
+def create_success_message(text):
+    """Create green success message."""
+    return gr.HTML(f'''
+        <div style="color: #155724; padding: 12px; border: 1px solid #c3e6cb; border-radius: 6px; background-color: #d4edda; margin: 10px 0;">
+            <strong>✅ Success:</strong> {text}
+        </div>
+    ''')
+
+
+def create_error_message(text):
+    """Create red error message.""" 
+    return gr.HTML(f'''
+        <div style="color: #721c24; padding: 12px; border: 1px solid #f5c6cb; border-radius: 6px; background-color: #f8d7da; margin: 10px 0;">
+            <strong>❌ Error:</strong> {text}
+        </div>
+    ''')
+
+
+def create_warning_message(text):
+    """Create yellow warning message."""
+    return gr.HTML(f'''
+        <div style="color: #856404; padding: 12px; border: 1px solid #ffeaa7; border-radius: 6px; background-color: #fff3cd; margin: 10px 0;">
+            <strong>⚠️ Warning:</strong> {text}  
+        </div>
+    ''')
+
+
+def extract_transcription_from_dialog(dialog_messages):
+    """Extract transcription text from dialog messages."""
+    if not dialog_messages:
+        logger.debug("No dialog messages to extract transcription from")
+        return ""
+    
+    transcription_parts = []
+    
+    try:
+        # Handle Gradio chatbot message format - list of message objects
+        for message in dialog_messages:
+            if isinstance(message, dict):
+                # New message format: {"role": "user/assistant", "content": "text"}
+                if 'content' in message and message.get('role') in ['user', 'assistant']:
+                    content = message['content']
+                    if isinstance(content, str) and content.strip():
+                        transcription_parts.append(content.strip())
+            elif isinstance(message, (list, tuple)) and len(message) >= 2:
+                # Legacy tuple format: [user_message, assistant_message] 
+                assistant_msg = message[1] if len(message) > 1 else message[0]
+                if isinstance(assistant_msg, str) and assistant_msg.strip():
+                    transcription_parts.append(assistant_msg.strip())
+    
+        result = "\n".join(transcription_parts)
+        logger.debug(f"Extracted {len(transcription_parts)} transcription parts, total length: {len(result)}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error extracting transcription from dialog: {e}")
+        return ""
+
+
+def parse_duration_to_minutes(duration_display):
+    """Parse duration from MM:SS or HH:MM:SS to float minutes."""
+    if not duration_display:
+        return 0.0
+        
+    try:
+        # Remove any extra whitespace
+        duration_display = duration_display.strip()
+        
+        # Split by colon
+        parts = duration_display.split(':')
+        
+        if len(parts) == 2:  # MM:SS format
+            minutes = int(parts[0])
+            seconds = int(parts[1])
+            total_minutes = minutes + seconds / 60.0
+        elif len(parts) == 3:  # HH:MM:SS format
+            hours = int(parts[0])
+            minutes = int(parts[1])  
+            seconds = int(parts[2])
+            total_minutes = hours * 60 + minutes + seconds / 60.0
+        else:
+            logger.warning(f"Unexpected duration format: {duration_display}")
+            return 0.0
+            
+        logger.debug(f"Parsed duration '{duration_display}' to {total_minutes:.2f} minutes")
+        return total_minutes
+        
+    except (ValueError, IndexError) as e:
+        logger.error(f"Error parsing duration '{duration_display}': {e}")
+        return 0.0
 
 
 # Utility handler functions
