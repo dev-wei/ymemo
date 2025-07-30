@@ -8,3 +8,4 @@ pyaudio>=0.2.14
 amazon-transcribe>=0.6.0
 azure-cognitiveservices-speech>=1.45.0
 supabase>=2.0.0
+psutil>=7.0.0

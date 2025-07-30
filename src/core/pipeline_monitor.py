@@ -15,13 +15,7 @@ from ..analytics.session_analytics import SessionAnalytics, AnalyticsEvent
 
 logger = logging.getLogger(__name__)
 
-# Try to import psutil, fall back gracefully if not available
-try:
-    import psutil
-    PSUTIL_AVAILABLE = True
-except ImportError:
-    logger.warning("psutil not available - resource monitoring will be limited")
-    PSUTIL_AVAILABLE = False
+import psutil
 
 
 class PipelineStage(Enum):
@@ -485,26 +479,20 @@ class PipelineMonitor:
         
         while not self._stop_monitoring.is_set():
             try:
-                # Collect system metrics (if psutil available)
-                if PSUTIL_AVAILABLE:
-                    process = psutil.Process()
-                    
-                    # CPU usage
-                    cpu_percent = process.cpu_percent()
-                    self.metrics.cpu_usage_percent.append(cpu_percent)
-                    
-                    # Memory usage
-                    memory_info = process.memory_info()
-                    memory_mb = memory_info.rss / (1024 * 1024)  # Convert to MB
-                    memory_percent = process.memory_percent()
-                    
-                    self.metrics.memory_usage_mb.append(memory_mb)
-                    self.metrics.memory_usage_percent.append(memory_percent)
-                else:
-                    # Fallback values when psutil not available
-                    cpu_percent = 0.0
-                    memory_mb = 0.0
-                    memory_percent = 0.0
+                # Collect system metrics using psutil
+                process = psutil.Process()
+                
+                # CPU usage
+                cpu_percent = process.cpu_percent()
+                self.metrics.cpu_usage_percent.append(cpu_percent)
+                
+                # Memory usage
+                memory_info = process.memory_info()
+                memory_mb = memory_info.rss / (1024 * 1024)  # Convert to MB
+                memory_percent = process.memory_percent()
+                
+                self.metrics.memory_usage_mb.append(memory_mb)
+                self.metrics.memory_usage_percent.append(memory_percent)
                 
                 # Update connection uptime
                 self.metrics.connection_uptime_seconds += 1.0
@@ -520,9 +508,8 @@ class PipelineMonitor:
                 }
                 self.metric_history.append(metric_snapshot)
                 
-                # Check for performance alerts (only if we have real metrics)
-                if PSUTIL_AVAILABLE:
-                    self._check_performance_alerts(cpu_percent, memory_mb)
+                # Check for performance alerts
+                self._check_performance_alerts(cpu_percent, memory_mb)
                 
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
