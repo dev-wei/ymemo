@@ -58,16 +58,58 @@ class AWSTranscribeHandler(TranscriptResultStreamHandler):
 
 
 class AWSTranscribeProvider(TranscriptionProvider):
-    """AWS Transcribe Streaming transcription provider."""
+    """
+    AWS Transcribe Streaming transcription provider.
     
-    def __init__(self, region: str = 'us-east-1', language_code: str = 'en-US', profile_name: Optional[str] = None):
-        self.region = region
-        self.language_code = language_code
+    This provider uses Amazon Transcribe Streaming API for real-time speech-to-text
+    conversion with support for partial results and speaker identification.
+    """
+    
+    def __init__(
+        self, 
+        region: str = 'us-east-1', 
+        language_code: str = 'en-US', 
+        profile_name: Optional[str] = None
+    ):
+        """
+        Initialize AWS Transcribe provider.
+        
+        Args:
+            region: AWS region for Transcribe service (default: 'us-east-1')
+            language_code: Language code for transcription (default: 'en-US')
+            profile_name: AWS profile name for authentication (default: None, uses default)
+            
+        Raises:
+            ValueError: If parameters are invalid
+            AWSTranscribeError: If AWS configuration is invalid
+        """
+        # Validate required parameters
+        if not region or not isinstance(region, str):
+            raise ValueError("AWS region must be a non-empty string")
+        if not language_code or not isinstance(language_code, str):
+            raise ValueError("Language code must be a non-empty string")
+        if profile_name is not None and not isinstance(profile_name, str):
+            raise ValueError("Profile name must be a string or None")
+        
+        # Store configuration
+        self.region = region.strip()
+        self.language_code = language_code.strip()
         self.profile_name = profile_name or os.getenv('AWS_PROFILE')
+        
+        # Initialize state
         self.client = None
         self.stream = None
         self.result_queue = asyncio.Queue()
         self._streaming_task = None
+        
+        logger.info(f"🏗️ AWS Transcribe: Initialized provider with region={self.region}, language={self.language_code}")
+        
+        # Validate AWS configuration early
+        try:
+            self._validate_aws_configuration()
+        except Exception as e:
+            logger.error(f"❌ AWS Transcribe: Configuration validation failed: {e}")
+            raise AWSTranscribeError(f"AWS configuration invalid: {e}") from e
         
         # Track utterances for proper partial result handling
         self.active_utterances: Dict[str, int] = {}  # result_id -> sequence_number
@@ -85,6 +127,32 @@ class AWSTranscribeProvider(TranscriptionProvider):
         self.retry_delay = 1.0  # Start with 1 second delay
         self.max_retry_delay = 60.0  # Cap at 60 seconds
         self._health_check_task = None
+    
+    def _validate_aws_configuration(self) -> None:
+        """
+        Validate AWS configuration and credentials.
+        
+        Raises:
+            AWSTranscribeError: If configuration is invalid
+        """
+        try:
+            # Test AWS credentials and region by creating a session
+            session = boto3.Session(profile_name=self.profile_name, region_name=self.region)
+            
+            # Verify credentials are available
+            credentials = session.get_credentials()
+            if not credentials:
+                raise AWSTranscribeError("AWS credentials not found. Please configure AWS credentials.")
+            
+            # Test that the region is valid by attempting to create a client
+            session.client('transcribe', region_name=self.region)
+            
+            logger.debug(f"✅ AWS Transcribe: Configuration validated for region {self.region}")
+            
+        except Exception as e:
+            if isinstance(e, AWSTranscribeError):
+                raise
+            raise AWSTranscribeError(f"AWS configuration validation failed: {e}") from e
     
     def set_connection_health_callback(self, callback: Callable[[bool, str], None]) -> None:
         """Set callback for connection health notifications.
@@ -182,14 +250,30 @@ class AWSTranscribeProvider(TranscriptionProvider):
             return False
     
     async def start_stream(self, audio_config: AudioConfig) -> None:
-        """Start the AWS Transcribe streaming session."""
+        """
+        Start the AWS Transcribe streaming session.
+        
+        Args:
+            audio_config: Audio configuration for the stream
+            
+        Raises:
+            AWSTranscribeError: If stream initialization fails
+            ConnectionError: If unable to connect to AWS
+            ValueError: If audio configuration is invalid
+        """
         try:
+            logger.info(f"🚀 AWS Transcribe: Starting stream with config: {audio_config}")
+            
+            # Validate audio configuration
+            if not isinstance(audio_config, AudioConfig):
+                raise ValueError("audio_config must be an AudioConfig instance")
+            
             # Create boto3 session with profile if specified
             if self.profile_name:
-                logger.info(f"🔑 Using AWS profile: {self.profile_name}")
+                logger.info(f"🔑 AWS Transcribe: Using AWS profile: {self.profile_name}")
                 session = boto3.Session(profile_name=self.profile_name)
             else:
-                logger.info("🔑 Using default AWS credentials")
+                logger.info("🔑 AWS Transcribe: Using default AWS credentials")
                 session = boto3.Session()
             
             logger.info(f"🚀 Initializing AWS Transcribe client (region: {self.region})")

@@ -15,9 +15,33 @@ logger = logging.getLogger(__name__)
 
 
 class PyAudioCaptureProvider(AudioCaptureProvider):
-    """PyAudio-based audio capture implementation."""
+    """
+    PyAudio-based audio capture implementation.
     
-    def __init__(self):
+    This provider uses PyAudio to capture audio from system microphones
+    for real-time transcription processing.
+    """
+    
+    def __init__(self, device_index: Optional[int] = None):
+        """
+        Initialize PyAudio capture provider.
+        
+        Args:
+            device_index: Specific audio device index to use (default: None, uses system default)
+            
+        Raises:
+            AudioCaptureError: If PyAudio initialization fails
+        """
+        # Validate parameters
+        if device_index is not None and not isinstance(device_index, int):
+            raise ValueError("device_index must be an integer or None")
+        if device_index is not None and device_index < 0:
+            raise ValueError("device_index must be non-negative")
+        
+        # Store configuration
+        self.default_device_index = device_index
+        
+        # Initialize state
         self.audio = None
         self.stream = None
         self.audio_queue = queue.Queue()  # Use thread-safe queue
@@ -26,11 +50,54 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
         
         # Instance tracking for debugging
         self._instance_id = id(self)
-        logger.info(f"🏗️ PyAudio: Created new instance {self._instance_id}")
+        logger.info(f"🏗️ PyAudio: Created new instance {self._instance_id} with default_device={device_index}")
         
-    async def start_capture(self, audio_config: AudioConfig, device_id: Optional[int] = None) -> None:
-        """Start audio capture from specified device."""
+        # Validate PyAudio availability early
         try:
+            self._validate_pyaudio_availability()
+        except Exception as e:
+            logger.error(f"❌ PyAudio: Initialization validation failed: {e}")
+            raise AudioCaptureError(f"PyAudio initialization failed: {e}") from e
+    
+    def _validate_pyaudio_availability(self) -> None:
+        """
+        Validate that PyAudio is available and working.
+        
+        Raises:
+            AudioCaptureError: If PyAudio is not available or not working
+        """
+        try:
+            # Test PyAudio initialization
+            test_audio = pyaudio.PyAudio()
+            test_audio.terminate()  # Clean up immediately
+            logger.debug("✅ PyAudio: Availability validation successful")
+        except Exception as e:
+            raise AudioCaptureError(f"PyAudio not available or not working: {e}") from e
+    
+    async def start_capture(self, audio_config: AudioConfig, device_id: Optional[int] = None) -> None:
+        """
+        Start audio capture from specified device.
+        
+        Args:
+            audio_config: Audio configuration for capture
+            device_id: Specific device ID to use (overrides constructor default)
+            
+        Raises:
+            AudioCaptureError: If capture initialization fails
+            AudioDeviceError: If specified device is not available
+            ValueError: If audio configuration is invalid
+        """
+        try:
+            logger.info(f"🚀 PyAudio: Starting capture with config: {audio_config}")
+            
+            # Validate audio configuration
+            if not isinstance(audio_config, AudioConfig):
+                raise ValueError("audio_config must be an AudioConfig instance")
+            
+            # Determine device to use
+            target_device = device_id if device_id is not None else self.default_device_index
+            
+            logger.info(f"🎤 PyAudio: Initializing capture on device_id={target_device}")
             self.audio = pyaudio.PyAudio()
             
             # Configure audio format
