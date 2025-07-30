@@ -37,13 +37,14 @@ class AudioSessionManager:
         # Initialize AudioProcessor once for the entire app lifecycle
         logger.info("🏗️ SessionManager: Initializing AudioProcessor for app lifecycle...")
         try:
+            # Use centralized configuration instead of hardcoded values
+            from config.audio_config import get_config
+            system_config = get_config()
+            
             self.audio_processor = AudioProcessor(
-                transcription_provider='aws',
-                capture_provider='pyaudio',
-                transcription_config={
-                    'region': 'us-east-1',
-                    'language_code': 'en-US'
-                }
+                transcription_provider=system_config.transcription_provider,
+                capture_provider=system_config.capture_provider,
+                transcription_config=system_config.get_transcription_config()
             )
             # Set up callbacks once
             self.audio_processor.set_transcription_callback(self._on_transcription_received)

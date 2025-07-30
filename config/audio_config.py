@@ -1,8 +1,11 @@
 """Configuration system for audio processing providers."""
 
 import os
-from typing import Dict, Any, Optional
+import logging
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, asdict
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,6 +51,9 @@ class AudioSystemConfig:
     def __post_init__(self):
         if self.fallback_providers is None:
             self.fallback_providers = ['whisper', 'google']
+        
+        # Validate configuration after initialization
+        self.validate()
     
     @classmethod
     def from_env(cls) -> 'AudioSystemConfig':
@@ -122,6 +128,81 @@ class AudioSystemConfig:
             format=self.audio_format
         )
     
+    def validate(self) -> None:
+        """Validate configuration values and raise descriptive errors."""
+        errors = []
+        
+        # Validate provider selection
+        valid_transcription_providers = ['aws', 'azure', 'whisper', 'google']
+        if self.transcription_provider not in valid_transcription_providers:
+            errors.append(
+                f"Invalid transcription_provider '{self.transcription_provider}'. "
+                f"Valid options: {', '.join(valid_transcription_providers)}"
+            )
+        
+        valid_capture_providers = ['pyaudio', 'file']
+        if self.capture_provider not in valid_capture_providers:
+            errors.append(
+                f"Invalid capture_provider '{self.capture_provider}'. "
+                f"Valid options: {', '.join(valid_capture_providers)}"
+            )
+        
+        # Validate audio settings
+        if self.sample_rate <= 0:
+            errors.append(f"Sample rate must be positive, got {self.sample_rate}")
+        
+        if self.channels <= 0:
+            errors.append(f"Number of channels must be positive, got {self.channels}")
+        
+        if self.chunk_size <= 0:
+            errors.append(f"Chunk size must be positive, got {self.chunk_size}")
+        
+        valid_formats = ['int16', 'int24', 'int32', 'float32']
+        if self.audio_format not in valid_formats:
+            errors.append(
+                f"Invalid audio_format '{self.audio_format}'. "
+                f"Valid options: {', '.join(valid_formats)}"
+            )
+        
+        # Validate AWS settings if using AWS
+        if self.transcription_provider == 'aws':
+            if not self.aws_region:
+                errors.append("AWS region is required when using AWS transcription provider")
+            
+            if not self.aws_language_code:
+                errors.append("AWS language code is required when using AWS transcription provider")
+        
+        # Validate Azure settings if using Azure
+        if self.transcription_provider == 'azure':
+            if not self.azure_speech_key:
+                errors.append("Azure speech key is required when using Azure transcription provider")
+            
+            if not self.azure_speech_region:
+                errors.append("Azure speech region is required when using Azure transcription provider")
+        
+        # Validate performance settings
+        if self.max_latency_ms <= 0:
+            errors.append(f"Max latency must be positive, got {self.max_latency_ms}")
+        
+        if self.partial_result_timeout <= 0:
+            errors.append(f"Partial result timeout must be positive, got {self.partial_result_timeout}")
+        
+        if not (0.0 <= self.confidence_threshold <= 1.0):
+            errors.append(f"Confidence threshold must be between 0.0 and 1.0, got {self.confidence_threshold}")
+        
+        # Log warnings for potentially problematic configurations
+        if self.sample_rate != 16000:
+            logger.warning(f"Non-standard sample rate {self.sample_rate}Hz may cause issues with transcription providers")
+        
+        if self.channels > 1:
+            logger.warning(f"Multi-channel audio ({self.channels} channels) may not be supported by all transcription providers")
+        
+        if errors:
+            error_message = "Configuration validation failed:\n" + "\n".join(f"  - {error}" for error in errors)
+            raise ValueError(error_message)
+        
+        logger.debug("Configuration validation passed")
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
         return asdict(self)
@@ -138,7 +219,50 @@ def get_config() -> AudioSystemConfig:
     1. Environment variables
     2. Default configuration
     """
-    return AudioSystemConfig.from_env()
+    config = AudioSystemConfig.from_env()
+    
+    # Log configuration for debugging (mask sensitive values)
+    masked_config = config.to_dict().copy()
+    if masked_config.get('azure_speech_key'):
+        masked_config['azure_speech_key'] = '***masked***'
+    
+    logger.info("🔧 Loaded audio system configuration:")
+    logger.info(f"  - Transcription Provider: {config.transcription_provider}")
+    logger.info(f"  - Capture Provider: {config.capture_provider}")
+    logger.info(f"  - AWS Region: {config.aws_region}")
+    logger.info(f"  - AWS Language: {config.aws_language_code}")
+    logger.info(f"  - Audio Format: {config.sample_rate}Hz, {config.channels}ch, {config.audio_format}")
+    logger.info(f"  - Chunk Size: {config.chunk_size}")
+    logger.info(f"  - Max Latency: {config.max_latency_ms}ms")
+    logger.info(f"  - Partial Results: {config.enable_partial_results}")
+    
+    logger.debug(f"Full configuration (sensitive values masked): {masked_config}")
+    
+    return config
+
+
+def print_config_summary() -> None:
+    """Print a human-readable configuration summary for debugging."""
+    config = get_config()
+    print("=== Audio System Configuration Summary ===")
+    print(f"Transcription Provider: {config.transcription_provider}")
+    print(f"Capture Provider: {config.capture_provider}")
+    print(f"")
+    print(f"Audio Settings:")
+    print(f"  - Sample Rate: {config.sample_rate} Hz")
+    print(f"  - Channels: {config.channels}")
+    print(f"  - Format: {config.audio_format}")
+    print(f"  - Chunk Size: {config.chunk_size}")
+    print(f"")
+    print(f"AWS Configuration:")
+    print(f"  - Region: {config.aws_region}")
+    print(f"  - Language: {config.aws_language_code}")
+    print(f"")
+    print(f"Performance Settings:")
+    print(f"  - Max Latency: {config.max_latency_ms} ms")
+    print(f"  - Partial Results: {config.enable_partial_results}")
+    print(f"  - Confidence Threshold: {config.confidence_threshold}")
+    print("=============================================")
 
 
 # Provider-specific configuration templates

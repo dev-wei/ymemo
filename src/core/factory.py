@@ -92,9 +92,11 @@ class AudioProcessorFactory:
             RuntimeError: If provider initialization fails
             
         Example:
-            # Create AWS provider
+            # Create AWS provider using system config
+            from config.audio_config import get_config
+            config = get_config()
             aws_provider = AudioProcessorFactory.create_transcription_provider(
-                'aws', region='us-east-1', language_code='en-US'
+                'aws', **config.get_transcription_config()
             )
             
             # Create Azure provider
@@ -304,15 +306,15 @@ class AudioProcessorFactory:
 
 
 def create_aws_transcribe_provider(
-    region: str = 'us-east-1', 
-    language_code: str = 'en-US',
+    region: Optional[str] = None, 
+    language_code: Optional[str] = None,
     profile_name: Optional[str] = None
 ) -> TranscriptionProvider:
     """
-    Create AWS Transcribe provider with common defaults.
+    Create AWS Transcribe provider using system configuration defaults.
     
-    This is a convenience function that simplifies creating AWS Transcribe providers
-    with commonly used configuration values.
+    This is a convenience function that uses centralized configuration
+    with optional parameter overrides.
     
     Args:
         region: AWS region for Transcribe service (default: 'us-east-1')
@@ -332,11 +334,20 @@ def create_aws_transcribe_provider(
             language_code='es-US'
         )
     """
+    # Use system configuration as defaults if not provided
+    from config.audio_config import get_config
+    system_config = get_config()
+    
+    # Use provided values or fall back to system config
+    final_region = region or system_config.aws_region
+    final_language = language_code or system_config.aws_language_code
+    final_profile = profile_name  # This can stay None if not provided
+    
     return AudioProcessorFactory.create_transcription_provider(
         'aws', 
-        region=region, 
-        language_code=language_code,
-        profile_name=profile_name
+        region=final_region, 
+        language_code=final_language,
+        profile_name=final_profile
     )
 
 

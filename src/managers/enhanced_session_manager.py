@@ -400,9 +400,10 @@ class EnhancedAudioSessionManager:
                     device_index=device_index
                 )
                 
-                # Create audio processor
-                default_config = {'region': 'us-east-1', 'language_code': 'en-US'}
-                transcription_config = config or default_config
+                # Create audio processor using centralized configuration
+                from config.audio_config import get_config
+                system_config = get_config()
+                transcription_config = config or system_config.get_transcription_config()
                 
                 self._audio_processor = AudioProcessor(
                     transcription_provider='aws',

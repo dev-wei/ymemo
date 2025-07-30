@@ -93,17 +93,48 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 
 ## Configuration
 
-**Environment Variables:**
-- `LOG_LEVEL` - Set logging level (DEBUG, INFO, WARNING, ERROR)
-- `TRANSCRIPTION_PROVIDER` - Choose transcription provider ('aws' or 'azure', default: 'aws')
-- `CAPTURE_PROVIDER` - Choose audio capture provider (default: 'pyaudio')
-- `ENABLE_SPEAKER_DIARIZATION` - Enable speaker identification for AWS (true/false)
+**Centralized Configuration System:**
+- All configuration is managed through `config/audio_config.py`
+- Configuration is loaded from environment variables with sensible defaults
+- Automatic validation with helpful error messages
+- Debug logging shows loaded configuration values
 
-**AWS Configuration:**
+**Key Environment Variables:**
+
+*Provider Selection:*
+- `TRANSCRIPTION_PROVIDER` - Choose transcription provider ('aws', 'azure', 'whisper', 'google', default: 'aws')
+- `CAPTURE_PROVIDER` - Choose audio capture provider ('pyaudio', 'file', default: 'pyaudio')
+
+*Audio Settings:*
+- `AUDIO_SAMPLE_RATE` - Sample rate in Hz (default: 16000)
+- `AUDIO_CHANNELS` - Number of audio channels (default: 1)
+- `AUDIO_CHUNK_SIZE` - Audio chunk size (default: 1024)
+- `AUDIO_FORMAT` - Audio format ('int16', 'int24', 'int32', 'float32', default: 'int16')
+
+*AWS Configuration:*
+- `AWS_REGION` - AWS region (default: 'us-east-1')
+- `AWS_LANGUAGE_CODE` - Language code (default: 'en-US')
+- `AWS_MAX_SPEAKERS` - Maximum speakers for diarization (default: 10)
+- `ENABLE_SPEAKER_DIARIZATION` - Enable speaker identification (true/false)
+
+*Performance Settings:*
+- `MAX_LATENCY_MS` - Maximum latency in milliseconds (default: 300)
+- `ENABLE_PARTIAL_RESULTS` - Enable partial results (default: true)
+- `PARTIAL_RESULT_HANDLING` - How to handle partials ('replace', 'append', 'final_only', default: 'replace')
+- `CONFIDENCE_THRESHOLD` - Minimum confidence threshold (default: 0.0)
+
+*Other Settings:*
+- `LOG_LEVEL` - Set logging level (DEBUG, INFO, WARNING, ERROR)
+
+**Configuration Debugging:**
+```python
+from config.audio_config import print_config_summary
+print_config_summary()  # Shows current configuration
+```
+
+**AWS Setup:**
 - Requires AWS credentials configured (via ~/.aws/credentials or environment)
-- Default region: us-east-1
-- Default language: en-US
-- Speaker diarization: Set `ENABLE_SPEAKER_DIARIZATION=true`
+- Uses centralized configuration for region and language settings
 
 **Azure Speech Service Configuration:**
 - `AZURE_SPEECH_KEY` - Azure Speech Service API key (required)
