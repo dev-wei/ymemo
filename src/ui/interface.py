@@ -27,6 +27,7 @@ from .interface_handlers import (
     handle_copy_event, get_current_duration_display, reset_meeting_duration,
     delete_meeting_by_id_input
 )
+from .interface_dialog_handlers import update_dialog_state, combined_update, handle_download_click
 
 logger = logging.getLogger(__name__)
 
@@ -265,67 +266,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
         # State management for real-time updates
         dialog_state = gr.State([])
         
-        def update_dialog_state(current_messages, new_message):
-            """Update dialog state with new transcription message."""
-            try:
-                logger.debug(f"UI: Updating dialog state with message: {new_message}")
-                
-                # Create a copy of current messages
-                updated_messages = current_messages.copy()
-                
-                # Handle partial result updates
-                if new_message.get("utterance_id") and new_message.get("is_partial"):
-                    # Find existing message with same utterance_id
-                    existing_index = None
-                    for i, msg in enumerate(updated_messages):
-                        if msg.get("utterance_id") == new_message["utterance_id"]:
-                            existing_index = i
-                            break
-                    
-                    if existing_index is not None:
-                        # Update existing message
-                        updated_messages[existing_index] = new_message
-                        logger.debug(f"UI: Updated partial message at index {existing_index}")
-                    else:
-                        # Add new partial message
-                        updated_messages.append(new_message)
-                        logger.debug(f"UI: Added new partial message")
-                else:
-                    # Final result or no utterance tracking
-                    if new_message.get("utterance_id"):
-                        # Replace partial result with final result
-                        existing_index = None
-                        for i, msg in enumerate(updated_messages):
-                            if msg.get("utterance_id") == new_message["utterance_id"]:
-                                existing_index = i
-                                break
-                        
-                        if existing_index is not None:
-                            updated_messages[existing_index] = new_message
-                            logger.debug(f"UI: Finalized message at index {existing_index}")
-                        else:
-                            updated_messages.append(new_message)
-                            logger.debug(f"UI: Added new final message")
-                    else:
-                        # No utterance tracking, just append
-                        updated_messages.append(new_message)
-                        logger.debug(f"UI: Added message without utterance tracking")
-                        
-                logger.debug(f"UI: Dialog now has {len(updated_messages)} messages")
-                
-                # Convert to Gradio format
-                gradio_messages = []
-                for msg in updated_messages:
-                    gradio_messages.append({
-                        "role": "assistant",
-                        "content": msg["content"]
-                    })
-                
-                return updated_messages, gradio_messages
-                
-            except Exception as e:
-                logger.error(f"Error updating dialog state: {e}")
-                return current_messages, []
+        # Dialog state update function moved to interface_dialog_handlers.py
         
         # Event handlers moved to interface_handlers.py
         
@@ -352,13 +293,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             outputs=[status_text, start_btn, stop_btn, save_meeting_btn]
         )
         
-        # Combined update function for dialog, download button, and duration
-        def combined_update():
-            """Update dialog, download button visibility, and duration display."""
-            dialog_state_result, dialog_output_result = conditional_update()
-            download_button_result = update_download_button_visibility()
-            duration_display_result = get_current_duration_display()
-            return dialog_state_result, dialog_output_result, download_button_result, duration_display_result
+        # Combined update function moved to interface_dialog_handlers.py
         
         # Timer for dialog, download button, and duration updates  
         timer.tick(
@@ -366,11 +301,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             outputs=[dialog_state, dialog_output, download_transcript_btn, duration_field]
         )
         
-        # Download transcript button - following the working Gradio pattern
-        def handle_download_click():
-            """Handle download button click - generate file and return DownloadButton with value."""
-            file_path = download_transcript()
-            return create_download_button(file_path)
+        # Download click handler moved to interface_dialog_handlers.py
         
         download_transcript_btn.click(
             fn=handle_download_click,

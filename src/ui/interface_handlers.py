@@ -135,7 +135,7 @@ def handle_transcription_update(current_state, message):
     """Handle new transcription message and update dialog state."""
     try:
         logger.debug(f"UI: Handling transcription update: {message}")
-        from .interface import update_dialog_state
+        from .interface_dialog_handlers import update_dialog_state
         updated_state, gradio_messages = update_dialog_state(current_state, message)
         return updated_state, gradio_messages
     except Exception as e:
