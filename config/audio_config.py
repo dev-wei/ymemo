@@ -24,6 +24,15 @@ class AudioSystemConfig:
     aws_language_code: str = 'en-US'
     aws_max_speakers: int = 10
     
+    # Azure Speech Service settings
+    azure_speech_key: str = ''
+    azure_speech_region: str = 'eastus'
+    azure_speech_language: str = 'en-US'
+    azure_speech_endpoint: Optional[str] = None
+    azure_enable_speaker_diarization: bool = False
+    azure_max_speakers: int = 4
+    azure_speech_timeout: int = 30
+    
     # Performance settings
     max_latency_ms: int = 300
     enable_partial_results: bool = True
@@ -53,6 +62,13 @@ class AudioSystemConfig:
             aws_region=os.getenv('AWS_REGION', 'us-east-1'),
             aws_language_code=os.getenv('AWS_LANGUAGE_CODE', 'en-US'),
             aws_max_speakers=int(os.getenv('AWS_MAX_SPEAKERS', '10')),
+            azure_speech_key=os.getenv('AZURE_SPEECH_KEY', ''),
+            azure_speech_region=os.getenv('AZURE_SPEECH_REGION', 'eastus'),
+            azure_speech_language=os.getenv('AZURE_SPEECH_LANGUAGE', 'en-US'),
+            azure_speech_endpoint=os.getenv('AZURE_SPEECH_ENDPOINT'),
+            azure_enable_speaker_diarization=os.getenv('AZURE_ENABLE_SPEAKER_DIARIZATION', 'false').lower() == 'true',
+            azure_max_speakers=int(os.getenv('AZURE_MAX_SPEAKERS', '4')),
+            azure_speech_timeout=int(os.getenv('AZURE_SPEECH_TIMEOUT', '30')),
             max_latency_ms=int(os.getenv('MAX_LATENCY_MS', '300')),
             enable_partial_results=os.getenv('ENABLE_PARTIAL_RESULTS', 'true').lower() == 'true',
             partial_result_handling=os.getenv('PARTIAL_RESULT_HANDLING', 'replace'),
@@ -66,6 +82,16 @@ class AudioSystemConfig:
             return {
                 'region': self.aws_region,
                 'language_code': self.aws_language_code
+            }
+        elif self.transcription_provider == 'azure':
+            return {
+                'speech_key': self.azure_speech_key,
+                'region': self.azure_speech_region,
+                'language_code': self.azure_speech_language,
+                'endpoint': self.azure_speech_endpoint,
+                'enable_speaker_diarization': self.azure_enable_speaker_diarization,
+                'max_speakers': self.azure_max_speakers,
+                'timeout': self.azure_speech_timeout
             }
         elif self.transcription_provider == 'whisper':
             return {

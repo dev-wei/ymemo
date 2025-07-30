@@ -261,10 +261,11 @@ def create_header():
 
 def create_meeting_list():
     """Create the meeting list panel with delete functionality."""
-    with gr.Row(elem_classes=["meeting-row"]):
-        with gr.Column(scale=1, elem_classes=["meeting-panel"]):
-            gr.Markdown(UI_TEXT["meeting_list_title"])
-            
+    with gr.Column(elem_classes=["meeting-list-container"]):
+        gr.Markdown(UI_TEXT["meeting_list_title"])
+        
+        # Meeting list dataframe in its own container
+        with gr.Column(elem_classes=["meeting-panel"]):
             meeting_list = gr.Dataframe(
                 headers=TABLE_HEADERS["meeting_list"],
                 datatype=["number", "str", "str", "str", "str"],  # number for ID
@@ -276,8 +277,9 @@ def create_meeting_list():
                 show_row_numbers=True,       # Show row numbers for additional clarity
                 wrap=True                    # Enable text wrapping if needed
             )
-            
-            # Delete section with text input
+        
+        # Delete section - positioned below the table, outside the fixed-height panel
+        with gr.Column(elem_classes=["delete-controls-section"]):
             with gr.Row():
                 meeting_id_input = gr.Textbox(
                     label="Meeting ID to Delete",
@@ -296,8 +298,8 @@ def create_meeting_list():
                 value="💡 Enter a meeting ID from the table above and click Delete",
                 visible=True
             )
-            
-            return meeting_list, meeting_id_input, delete_meeting_btn, delete_status
+        
+        return meeting_list, meeting_id_input, delete_meeting_btn, delete_status
 
 
 def create_dialog_panel():

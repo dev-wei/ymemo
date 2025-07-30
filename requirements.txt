@@ -6,4 +6,5 @@ asyncio-throttle>=1.0.2
 SpeechRecognition>=3.12.0
 pyaudio>=0.2.14
 amazon-transcribe>=0.6.0
+azure-cognitiveservices-speech>=1.45.0
 supabase>=2.0.0

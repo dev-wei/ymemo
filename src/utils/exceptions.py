@@ -24,6 +24,26 @@ class AWSTranscribeError(TranscriptionProviderError):
     pass
 
 
+class AzureSpeechError(TranscriptionProviderError):
+    """Raised when there's an Azure Speech Service specific error."""
+    pass
+
+
+class AzureSpeechConnectionError(AzureSpeechError):
+    """Raised when there's an Azure Speech Service connection error."""
+    pass
+
+
+class AzureSpeechAuthenticationError(AzureSpeechError):
+    """Raised when there's an Azure Speech Service authentication error."""
+    pass
+
+
+class AzureSpeechConfigurationError(AzureSpeechError):
+    """Raised when there's an Azure Speech Service configuration error."""
+    pass
+
+
 class AudioCaptureError(AudioProcessingError):
     """Raised when there's an issue with audio capture."""
     pass

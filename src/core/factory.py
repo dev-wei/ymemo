@@ -5,6 +5,7 @@ from typing import Dict, Type, Any, Optional
 
 from .interfaces import TranscriptionProvider, AudioCaptureProvider
 from ..audio.providers.aws_transcribe import AWSTranscribeProvider
+from ..audio.providers.azure_speech import AzureSpeechProvider
 from ..audio.providers.pyaudio_capture import PyAudioCaptureProvider
 from ..audio.providers.file_audio_capture import FileAudioCaptureProvider
 
@@ -18,6 +19,7 @@ class AudioProcessorFactory:
     # Registry of available transcription providers
     TRANSCRIPTION_PROVIDERS: Dict[str, Type[TranscriptionProvider]] = {
         'aws': AWSTranscribeProvider,
+        'azure': AzureSpeechProvider,
     }
     
     # Registry of available audio capture providers
@@ -160,6 +162,28 @@ def create_aws_transcribe_provider(
         region=region, 
         language_code=language_code,
         profile_name=profile_name
+    )
+
+
+def create_azure_speech_provider(
+    speech_key: str,
+    region: str = 'eastus',
+    language_code: str = 'en-US',
+    endpoint: Optional[str] = None,
+    enable_speaker_diarization: bool = False,
+    max_speakers: int = 4,
+    timeout: int = 30
+) -> TranscriptionProvider:
+    """Create Azure Speech Service provider with common defaults."""
+    return AudioProcessorFactory.create_transcription_provider(
+        'azure',
+        speech_key=speech_key,
+        region=region,
+        language_code=language_code,
+        endpoint=endpoint,
+        enable_speaker_diarization=enable_speaker_diarization,
+        max_speakers=max_speakers,
+        timeout=timeout
     )
 
 

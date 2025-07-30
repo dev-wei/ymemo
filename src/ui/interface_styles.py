@@ -15,13 +15,15 @@ APP_CSS = """
     
     
     /* Desktop Layout - Default */
-    .meeting-row {
+    .meeting-list-container {
         margin-bottom: 20px !important;
+        width: 100% !important;
     }
     .meeting-panel {
-        height: 300px !important;
+        height: 250px !important;
         overflow-y: auto !important;
         padding-right: 10px !important;
+        margin-bottom: 10px !important;
     }
     .main-content-row {
         gap: 1rem !important;
@@ -38,19 +40,37 @@ APP_CSS = """
         padding-left: 10px !important;
     }
     
+    /* Delete controls section styling */
+    .delete-controls-section {
+        margin-top: 15px !important;
+        padding-top: 15px !important;
+        border-top: 1px solid #e0e0e0 !important;
+        width: 100% !important;
+    }
+    
     /* Mobile/Narrow Screen Layout */
     @media screen and (max-width: 768px) {
         .gradio-container {
             padding: 10px !important;
         }
+        .meeting-list-container {
+            margin-bottom: 15px !important;
+        }
         .meeting-panel {
-            height: 250px !important;
+            height: 200px !important;
+            margin-bottom: 8px !important;
         }
         .dialog-panel {
             height: 750px !important;
         }
         .control-panel {
             height: 400px !important;
+        }
+        
+        /* Mobile delete controls styling */
+        .delete-controls-section {
+            margin-top: 10px !important;
+            padding-top: 10px !important;
         }
         
         
@@ -92,8 +112,12 @@ APP_CSS = """
         .gradio-container {
             padding: 5px !important;
         }
+        .meeting-list-container {
+            margin-bottom: 10px !important;
+        }
         .meeting-panel {
-            height: 200px !important;
+            height: 180px !important;
+            margin-bottom: 5px !important;
         }
         .dialog-panel {
             height: 350px !important;
