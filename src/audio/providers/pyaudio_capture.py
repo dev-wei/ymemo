@@ -47,6 +47,7 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
         self.audio_queue = queue.Queue()  # Use thread-safe queue
         self._capture_thread = None
         self._stop_event = threading.Event()
+        self._is_active = False  # Track active state
         
         # Instance tracking for debugging
         self._instance_id = id(self)
@@ -89,6 +90,12 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
         """
         try:
             logger.info(f"🚀 PyAudio: Starting capture with config: {audio_config}")
+            logger.info(f"🚀 PyAudio: Instance {self._instance_id} - Current active state: {self._is_active}")
+            
+            # Check if already active - stop existing session first
+            if self._is_active:
+                logger.warning(f"⚠️ PyAudio: Instance {self._instance_id} already active, stopping existing session first")
+                await self.stop_capture()
             
             # Validate audio configuration
             if not isinstance(audio_config, AudioConfig):
@@ -98,7 +105,10 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
             target_device = device_id if device_id is not None else self.default_device_index
             
             logger.info(f"🎤 PyAudio: Initializing capture on device_id={target_device}")
-            self.audio = pyaudio.PyAudio()
+            
+            # Initialize PyAudio if not already done
+            if not self.audio:
+                self.audio = pyaudio.PyAudio()
             
             # Configure audio format
             format_map = {
@@ -121,8 +131,9 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
                 stream_callback=None  # We'll use blocking read
             )
             
-            # Reset stop event
-            self._stop_event.clear()
+            # Create fresh stop event for this session (critical for thread safety)
+            self._stop_event = threading.Event()
+            logger.info(f"🎤 PyAudio: Created fresh stop event with ID: {id(self._stop_event)}")
             
             # Start capture thread
             self._capture_thread = threading.Thread(
@@ -131,6 +142,9 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
             )
             self._capture_thread.daemon = True
             self._capture_thread.start()
+            
+            # Mark as active
+            self._is_active = True
             
             logger.info(f"🎤 PyAudio: Audio capture started - Instance: {self._instance_id}, Device: {device_id}, "
                        f"Sample Rate: {audio_config.sample_rate}Hz, "
@@ -221,16 +235,19 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
     
     async def get_audio_stream(self) -> AsyncGenerator[bytes, None]:
         """Get audio data stream."""
-        while not self._stop_event.is_set():
+        logger.info(f"🔊 PyAudio: Starting audio stream generator for instance {self._instance_id}")
+        logger.info(f"🔊 PyAudio: Stream generator - active: {self._is_active}, stop_event ID: {id(self._stop_event)}")
+        
+        while self._is_active and not self._stop_event.is_set():
             try:
                 # Wait for audio data with timeout (non-blocking)
                 audio_data = self.audio_queue.get(timeout=0.1)
                 
-                # Double-check stop event before yielding
-                if not self._stop_event.is_set():
+                # Triple-check before yielding
+                if self._is_active and not self._stop_event.is_set():
                     yield audio_data
                 else:
-                    logger.debug("🛑 PyAudio: Stop event detected, breaking audio stream")
+                    logger.debug(f"🛑 PyAudio: Stop condition met (active: {self._is_active}, stop_event: {self._stop_event.is_set()}), breaking audio stream")
                     break
                 
             except queue.Empty:
@@ -246,8 +263,13 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
     async def stop_capture(self) -> None:
         """Stop audio capture and cleanup resources."""
         logger.info(f"🛑 PyAudio: Stopping audio capture for instance {self._instance_id}...")
-        logger.info(f"🛑 PyAudio: Initial state - stream: {self.stream is not None}, thread: {self._capture_thread is not None if hasattr(self, '_capture_thread') else 'N/A'}")
+        logger.info(f"🛑 PyAudio: Initial state - active: {self._is_active}, stream: {self.stream is not None}, thread: {self._capture_thread is not None if hasattr(self, '_capture_thread') else 'N/A'}")
         logger.info(f"🛑 PyAudio: Stop event object ID: {id(self._stop_event)}")
+        
+        # If not active, nothing to stop
+        if not self._is_active:
+            logger.info(f"🛑 PyAudio: Instance {self._instance_id} not active, nothing to stop")
+            return
         
         # Log detailed capture thread info
         if hasattr(self, '_capture_thread') and self._capture_thread:
@@ -305,6 +327,9 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
         
         # Clear thread reference immediately to prevent access
         self._capture_thread = None
+        
+        # Mark as inactive
+        self._is_active = False
         
         await self._cleanup()
         logger.info("🛑 PyAudio: Stop capture complete")
@@ -393,3 +418,7 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
             logger.error(f"Error listing audio devices: {e}")
         
         return devices
+    
+    def is_active(self) -> bool:
+        """Check if the provider is currently active."""
+        return self._is_active

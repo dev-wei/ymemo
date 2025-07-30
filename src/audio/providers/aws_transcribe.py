@@ -99,8 +99,9 @@ class AWSTranscribeProvider(TranscriptionProvider):
         # Initialize state
         self.client = None
         self.stream = None
-        self.result_queue = asyncio.Queue()
+        self.result_queue = None  # Will be created fresh for each session
         self._streaming_task = None
+        self._current_event_loop = None  # Track current event loop
         
         logger.info(f"🏗️ AWS Transcribe: Initialized provider with region={self.region}, language={self.language_code}")
         
@@ -264,6 +265,25 @@ class AWSTranscribeProvider(TranscriptionProvider):
         try:
             logger.info(f"🚀 AWS Transcribe: Starting stream with config: {audio_config}")
             
+            # Reset connection state for new session
+            self.is_connected = False
+            self.retry_count = 0
+            logger.info("🔄 AWS Transcribe: Reset connection state for new session")
+            
+            # Create fresh result queue for this session in current event loop
+            current_loop = asyncio.get_event_loop()
+            logger.info(f"🔄 AWS Transcribe: Current event loop ID: {id(current_loop)}")
+            
+            if self._current_event_loop != current_loop:
+                logger.info(f"🔄 AWS Transcribe: Event loop changed (old: {id(self._current_event_loop) if self._current_event_loop else 'None'}, new: {id(current_loop)})")
+                self._current_event_loop = current_loop
+                
+            # Always create fresh queue for each session to avoid event loop binding issues
+            old_queue_id = id(self.result_queue) if self.result_queue else 'None'
+            self.result_queue = asyncio.Queue()
+            logger.info(f"🔄 AWS Transcribe: Created fresh result queue (old: {old_queue_id}, new: {id(self.result_queue)})")
+            logger.info(f"🔄 AWS Transcribe: Queue created in event loop: {id(current_loop)}")
+            
             # Validate audio configuration
             if not isinstance(audio_config, AudioConfig):
                 raise ValueError("audio_config must be an AudioConfig instance")
@@ -392,8 +412,14 @@ class AWSTranscribeProvider(TranscriptionProvider):
                             sequence_number=sequence_number
                         )
                         
+                        # Validate queue before putting result
+                        if not self.result_queue:
+                            logger.error(f"❌ AWS Transcribe: No result queue to put transcription: '{text}'")
+                            continue
+                            
                         await self.result_queue.put(transcription_result)
-                        logger.debug(f"✅ Added transcription result to queue: '{text}' (utterance: {utterance_id})")
+                        logger.debug(f"✅ Added transcription result to queue {id(self.result_queue)}: '{text}' (utterance: {utterance_id})")
+                        logger.debug(f"📊 Queue size after put: {self.result_queue.qsize()}")
                         
                         # Update connection health tracking
                         self.last_result_time = time.time()
@@ -404,6 +430,9 @@ class AWSTranscribeProvider(TranscriptionProvider):
                         
         except Exception as e:
             logger.error(f"❌ Error processing transcript event: {e}")
+            logger.error(f"❌ Queue state during error - exists: {self.result_queue is not None}")
+            if self.result_queue:
+                logger.error(f"❌ Queue ID: {id(self.result_queue)}, size: {self.result_queue.qsize()}")
             import traceback
             traceback.print_exc()
             # Don't raise here to keep the stream going
@@ -440,10 +469,18 @@ class AWSTranscribeProvider(TranscriptionProvider):
     
     async def get_transcription(self) -> AsyncGenerator[TranscriptionResult, None]:
         """Get transcription results as they become available."""
+        logger.info(f"🔊 AWS Transcribe: Starting transcription generator with queue {id(self.result_queue) if self.result_queue else 'None'}")
+        
         while True:
             try:
+                # Validate that queue exists and is accessible
+                if not self.result_queue:
+                    logger.error("❌ AWS Transcribe: No result queue available")
+                    break
+                    
                 # Wait for results with timeout to allow for graceful shutdown
                 result = await asyncio.wait_for(self.result_queue.get(), timeout=0.1)
+                logger.debug(f"🔊 AWS Transcribe: Got result from queue {id(self.result_queue)}: '{result.text}'")
                 yield result
             except asyncio.TimeoutError:
                 # Continue polling for results
@@ -453,7 +490,12 @@ class AWSTranscribeProvider(TranscriptionProvider):
                 break
             except Exception as e:
                 logger.error(f"❌ AWS Transcribe: Error getting transcription result: {e}")
+                logger.error(f"❌ AWS Transcribe: Queue state - exists: {self.result_queue is not None}, queue: {self.result_queue}")
+                if self.result_queue:
+                    logger.error(f"❌ AWS Transcribe: Queue ID: {id(self.result_queue)}, size: {self.result_queue.qsize()}")
                 break
+        
+        logger.info("🛑 AWS Transcribe: Transcription generator stopped")
     
     async def stop_stream(self) -> None:
         """Stop the transcription stream and cleanup resources."""
@@ -511,6 +553,25 @@ class AWSTranscribeProvider(TranscriptionProvider):
             self.handler = None
             self._streaming_task = None
             self._health_check_task = None
+            
+            # Clear result queue to prevent stale results from carrying over
+            if self.result_queue:
+                queue_size = self.result_queue.qsize()
+                if queue_size > 0:
+                    logger.info(f"🗑️ AWS Transcribe: Clearing {queue_size} items from result queue")
+                    # Drain the queue
+                    try:
+                        while not self.result_queue.empty():
+                            try:
+                                self.result_queue.get_nowait()
+                            except:
+                                break
+                    except Exception as e:
+                        logger.warning(f"⚠️ AWS Transcribe: Error clearing result queue: {e}")
+                
+                logger.info(f"🗑️ AWS Transcribe: Cleared result queue {id(self.result_queue)}")
+            
+            # Don't set result_queue to None - let it be recreated fresh in next session
             
             # Reset connection health
             self.is_connected = False

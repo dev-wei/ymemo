@@ -33,13 +33,33 @@ class AudioSessionManager:
             return
             
         self._initialized = True
-        self.audio_processor: Optional[AudioProcessor] = None
+        
+        # Initialize AudioProcessor once for the entire app lifecycle
+        logger.info("🏗️ SessionManager: Initializing AudioProcessor for app lifecycle...")
+        try:
+            self.audio_processor = AudioProcessor(
+                transcription_provider='aws',
+                capture_provider='pyaudio',
+                transcription_config={
+                    'region': 'us-east-1',
+                    'language_code': 'en-US'
+                }
+            )
+            # Set up callbacks once
+            self.audio_processor.set_transcription_callback(self._on_transcription_received)
+            self.audio_processor.set_connection_health_callback(self._on_connection_health_changed)
+            logger.info("✅ SessionManager: AudioProcessor initialized successfully for reuse")
+        except Exception as e:
+            logger.error(f"❌ SessionManager: Failed to initialize AudioProcessor: {e}")
+            raise SessionManagerError(f"Failed to initialize AudioProcessor: {e}") from e
+            
         self.current_transcriptions: List[dict] = []
         self.transcription_callbacks: List[Callable[[dict], None]] = []
         self.background_thread: Optional[threading.Thread] = None
         self.background_loop: Optional[asyncio.AbstractEventLoop] = None
         self._session_lock = threading.Lock()
         self._stop_event = threading.Event()  # Simple signal for stopping
+        self._recording_active = False  # Track if recording is active
         
         # Track active partial results for smart updating
         self.active_partial_results: dict = {}  # utterance_id -> message_index
@@ -243,13 +263,13 @@ class AudioSessionManager:
         
         Args:
             device_index: Audio device index to use
-            config: Optional configuration for transcription
+            config: Optional configuration for transcription (ignored - using default config)
             
         Returns:
             True if successfully started, False otherwise
         """
         with self._session_lock:
-            if self.audio_processor is not None:
+            if self._recording_active:
                 logger.warning("⚠️  Recording already in progress, ignoring start request")
                 return False  # Already recording
             
@@ -274,25 +294,16 @@ class AudioSessionManager:
                 
                 logger.info(f"🎤 SessionManager: Preserving {len(self.current_transcriptions)} existing transcriptions")
                 
-                # Create audio processor with default or provided config
-                default_config = {
-                    'region': 'us-east-1',
-                    'language_code': 'en-US'
-                }
-                transcription_config = config or default_config
-                logger.debug(f"🔧 SessionManager: Using transcription config: {transcription_config}")
+                # Verify AudioProcessor is available (should be initialized in constructor)
+                if not self.audio_processor:
+                    logger.error("❌ SessionManager: No AudioProcessor available - this should not happen")
+                    return False
                 
-                self.audio_processor = AudioProcessor(
-                    transcription_provider='aws',
-                    capture_provider='pyaudio',
-                    transcription_config=transcription_config
-                )
-                logger.debug("✅ SessionManager: AudioProcessor created successfully")
+                logger.info("✅ SessionManager: Using existing AudioProcessor (no new instance created)")
+                logger.debug(f"🔧 SessionManager: AudioProcessor provider: {type(self.audio_processor.capture_provider).__name__}")
                 
-                # Set up callbacks
-                self.audio_processor.set_transcription_callback(self._on_transcription_received)
-                self.audio_processor.set_connection_health_callback(self._on_connection_health_changed)
-                logger.debug("✅ SessionManager: Transcription and connection health callbacks set")
+                # Mark recording as active
+                self._recording_active = True
                 
                 # Start recording in background thread
                 self.background_thread = threading.Thread(
@@ -307,7 +318,7 @@ class AudioSessionManager:
                 
             except Exception as e:
                 logger.error(f"❌ SessionManager: Failed to start recording: {e}", exc_info=True)
-                self.audio_processor = None
+                self._recording_active = False
                 return False
     
     def stop_recording(self) -> bool:
@@ -317,14 +328,14 @@ class AudioSessionManager:
             True if successfully stopped, False otherwise
         """
         with self._session_lock:
-            if self.audio_processor is None:
+            if not self._recording_active:
                 return False  # Not recording
             
             try:
                 logger.info("🛑 SessionManager: Initiating stop sequence")
                 
                 # First, signal the audio processor to stop
-                logger.info("🛑 SessionManager: Stopping AudioProcessor...")
+                logger.info("🛑 SessionManager: Stopping AudioProcessor recording...")
                 logger.info(f"🛑 SessionManager: AudioProcessor is_running before stop: {self.audio_processor.is_running}")
                 
                 # Stop the audio processor using the background loop if available
@@ -337,7 +348,7 @@ class AudioSessionManager:
                 
                 try:
                     if self.background_loop and not self.background_loop.is_closed():
-                        logger.info("🛑 SessionManager: Using background loop to stop AudioProcessor")
+                        logger.info("🛑 SessionManager: Using background loop to stop AudioProcessor recording")
                         logger.info(f"🛑 SessionManager: Background loop state: {self.background_loop}, closed: {self.background_loop.is_closed()}")
                         # Schedule the stop on the background loop
                         future = asyncio.run_coroutine_threadsafe(
@@ -348,7 +359,7 @@ class AudioSessionManager:
                         try:
                             future.result(timeout=timeout)
                             stop_success = True
-                            logger.info("✅ SessionManager: AudioProcessor stopped via background loop")
+                            logger.info("✅ SessionManager: AudioProcessor recording stopped via background loop")
                         except Exception as e:
                             logger.warning(f"⚠️ SessionManager: Future result error: {e}")
                             # Don't cancel the future - let it complete naturally
@@ -363,7 +374,7 @@ class AudioSessionManager:
                             stop_task = loop.create_task(self.audio_processor.stop_recording())
                             loop.run_until_complete(asyncio.wait_for(stop_task, timeout=timeout))
                             stop_success = True
-                            logger.info("✅ SessionManager: AudioProcessor stopped via new loop")
+                            logger.info("✅ SessionManager: AudioProcessor recording stopped via new loop")
                         except Exception as e:
                             logger.warning(f"⚠️ SessionManager: Stop task error: {e}")
                             if stop_task and not stop_task.done():
@@ -381,7 +392,7 @@ class AudioSessionManager:
                                 logger.warning(f"⚠️ SessionManager: Loop close error: {loop_error}")
                     
                     if stop_success:
-                        logger.info("✅ SessionManager: AudioProcessor stopped successfully")
+                        logger.info("✅ SessionManager: AudioProcessor recording stopped successfully (provider remains alive)")
                         logger.info(f"🛑 SessionManager: AudioProcessor is_running after stop: {self.audio_processor.is_running}")
                         logger.info(f"🛑 SessionManager: AudioProcessor provider type: {type(self.audio_processor.capture_provider).__name__ if self.audio_processor.capture_provider else 'None'}")
                         
@@ -409,12 +420,13 @@ class AudioSessionManager:
                 # Always clear background thread reference
                 self.background_thread = None
                 
-                # Clean up - always clear references regardless of stop success
+                # Clean up - clear background references but keep AudioProcessor for reuse
                 # Add small delay to ensure all cleanup completes
                 import time
                 time.sleep(0.1)
                 
-                self.audio_processor = None
+                # Mark recording as inactive (but keep AudioProcessor alive for reuse)
+                self._recording_active = False
                 self.background_loop = None
                 
                 # Enhanced duration tracking - complete current segment
@@ -444,8 +456,8 @@ class AudioSessionManager:
                 
             except Exception as e:
                 logger.error(f"Failed to stop recording: {e}", exc_info=True)
-                # Force cleanup even if there was an error
-                self.audio_processor = None
+                # Force cleanup even if there was an error (but keep AudioProcessor for reuse)
+                self._recording_active = False
                 self.background_loop = None
                 self.background_thread = None
                 return False
@@ -453,7 +465,7 @@ class AudioSessionManager:
     def is_recording(self) -> bool:
         """Check if currently recording."""
         with self._session_lock:
-            return self.audio_processor is not None
+            return self._recording_active
     
     def get_current_transcriptions(self) -> List[dict]:
         """Get current transcriptions."""
