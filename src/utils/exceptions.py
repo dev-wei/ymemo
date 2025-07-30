@@ -57,3 +57,21 @@ class SessionManagerError(AudioProcessingError):
 class ConfigurationError(AudioProcessingError):
     """Raised when there's an issue with configuration."""
     pass
+
+
+class PipelineError(AudioProcessingError):
+    """Raised when there's an issue with the audio processing pipeline."""
+    pass
+
+
+class PipelineTimeoutError(PipelineError):
+    """Raised when pipeline operations exceed timeout limits."""
+    
+    def __init__(self, message: str, timeout_seconds: float, cause: Exception = None):
+        super().__init__(message, cause)
+        self.timeout_seconds = timeout_seconds
+
+
+class ResourceCleanupError(PipelineError):
+    """Raised when resource cleanup fails during pipeline operations."""
+    pass

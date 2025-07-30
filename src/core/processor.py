@@ -7,7 +7,9 @@ from datetime import datetime
 
 from .interfaces import TranscriptionProvider, AudioCaptureProvider, AudioConfig, TranscriptionResult
 from .factory import AudioProcessorFactory
+from .pipeline_error_handler import PipelineErrorHandler, ErrorSeverity, RetryStrategy
 from config.audio_config import get_config
+from ..utils.exceptions import PipelineError, PipelineTimeoutError
 
 
 logger = logging.getLogger(__name__)
@@ -21,7 +23,8 @@ class AudioProcessor:
         transcription_provider: str = 'aws',
         capture_provider: str = 'pyaudio',
         transcription_config: Optional[Dict[str, Any]] = None,
-        capture_config: Optional[Dict[str, Any]] = None
+        capture_config: Optional[Dict[str, Any]] = None,
+        error_handler_config: Optional[Dict[str, Any]] = None
     ):
         logger.info(f"🏗️  AudioProcessor: Initializing with transcription={transcription_provider}, capture={capture_provider}")
         logger.debug(f"🔧 AudioProcessor: Transcription config: {transcription_config}")
@@ -47,6 +50,14 @@ class AudioProcessor:
         self.error_callback: Optional[Callable[[Exception], None]] = None
         self.connection_health_callback: Optional[Callable[[bool, str], None]] = None
         
+        # Error handling
+        error_config = error_handler_config or {}
+        self.error_handler = PipelineErrorHandler(
+            default_timeout=error_config.get('default_timeout', 30.0),
+            max_retries=error_config.get('max_retries', 3),
+            base_retry_delay=error_config.get('base_retry_delay', 1.0)
+        )
+        
         # Tasks
         self._capture_task: Optional[asyncio.Task] = None
         self._transcription_task: Optional[asyncio.Task] = None
@@ -58,34 +69,43 @@ class AudioProcessor:
         logger.debug("✅ AudioProcessor: Initialization complete")
     
     async def initialize(self) -> None:
-        """Initialize audio processing providers."""
-        try:
-            # Create transcription provider
-            self.transcription_provider = AudioProcessorFactory.create_transcription_provider(
-                self.transcription_provider_name,
-                **self.transcription_config
-            )
-            
-            # Create audio capture provider
-            self.capture_provider = AudioProcessorFactory.create_audio_capture_provider(
-                self.capture_provider_name,
-                **self.capture_config
-            )
-            
-            # Log provider instance details
-            if hasattr(self.capture_provider, '_instance_id'):
-                logger.info(f"🔧 AudioProcessor: Using capture provider instance {self.capture_provider._instance_id}")
-            
-            # Set up connection health monitoring for AWS Transcribe
-            if hasattr(self.transcription_provider, 'set_connection_health_callback') and self.connection_health_callback:
-                self.transcription_provider.set_connection_health_callback(self.connection_health_callback)
-                logger.info("🔍 AudioProcessor: Connection health monitoring enabled")
-            
-            logger.info("Audio processor initialized successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize audio processor: {e}")
-            raise
+        """Initialize audio processing providers with error handling."""
+        async with self.error_handler.handle_pipeline_operation(
+            "provider_initialization",
+            timeout=15.0,
+            severity=ErrorSeverity.CRITICAL
+        ):
+            try:
+                # Create transcription provider
+                logger.info(f"🏭 AudioProcessor: Creating transcription provider '{self.transcription_provider_name}'")
+                self.transcription_provider = AudioProcessorFactory.create_transcription_provider(
+                    self.transcription_provider_name,
+                    **self.transcription_config
+                )
+                
+                # Create audio capture provider  
+                logger.info(f"🎤 AudioProcessor: Creating capture provider '{self.capture_provider_name}'")
+                self.capture_provider = AudioProcessorFactory.create_audio_capture_provider(
+                    self.capture_provider_name,
+                    **self.capture_config
+                )
+                
+                # Log provider instance details
+                if hasattr(self.capture_provider, '_instance_id'):
+                    logger.info(f"🔧 AudioProcessor: Using capture provider instance {self.capture_provider._instance_id}")
+                
+                # Set up connection health monitoring for AWS Transcribe
+                if hasattr(self.transcription_provider, 'set_connection_health_callback') and self.connection_health_callback:
+                    self.transcription_provider.set_connection_health_callback(self.connection_health_callback)
+                    logger.info("🔍 AudioProcessor: Connection health monitoring enabled")
+                
+                logger.info("✅ AudioProcessor: Provider initialization completed successfully")
+                
+            except Exception as e:
+                logger.error(f"❌ AudioProcessor: Provider initialization failed: {e}")
+                # Clean up any partially initialized providers
+                await self._cleanup_providers()
+                raise PipelineError(f"Failed to initialize audio processor providers: {e}") from e
     
     async def start_recording(self, device_id: Optional[int] = None) -> None:
         """Start real-time audio recording and transcription.
@@ -107,13 +127,25 @@ class AudioProcessor:
             self.session_transcripts.clear()
             logger.info(f"🆔 AudioProcessor: Created meeting session: {self.current_meeting_id}")
             
-            # Start transcription stream
-            logger.debug("🎯 AudioProcessor: Starting transcription stream...")
-            await self.transcription_provider.start_stream(self.audio_config)
+            # Start transcription stream with error handling
+            async with self.error_handler.handle_pipeline_operation(
+                "transcription_start",
+                timeout=10.0,
+                severity=ErrorSeverity.HIGH,
+                cleanup_callback=lambda: self._emergency_cleanup_transcription()
+            ):
+                logger.debug("🎯 AudioProcessor: Starting transcription stream...")
+                await self.transcription_provider.start_stream(self.audio_config)
             
-            # Start audio capture
-            logger.debug("🎤 AudioProcessor: Starting audio capture...")
-            await self.capture_provider.start_capture(self.audio_config, device_id)
+            # Start audio capture with error handling
+            async with self.error_handler.handle_pipeline_operation(
+                "audio_capture_start",
+                timeout=8.0,
+                severity=ErrorSeverity.HIGH,
+                cleanup_callback=lambda: self._emergency_cleanup_capture()
+            ):
+                logger.debug("🎤 AudioProcessor: Starting audio capture...")
+                await self.capture_provider.start_capture(self.audio_config, device_id)
             
             # Start processing tasks
             logger.debug("🔄 AudioProcessor: Creating async tasks...")
@@ -134,17 +166,23 @@ class AudioProcessor:
                 logger.error(f"❌ AudioProcessor: Error in processing tasks: {e}")
                 raise
             
-        except Exception as e:
-            logger.error(f"❌ AudioProcessor: Failed to start recording: {e}")
-            import traceback
-            traceback.print_exc()
+        except (PipelineError, PipelineTimeoutError) as e:
+            logger.error(f"❌ AudioProcessor: Pipeline error during recording start: {e}")
             await self.stop_recording()
             if self.error_callback:
                 self.error_callback(e)
             raise
+        except Exception as e:
+            logger.error(f"❌ AudioProcessor: Unexpected error during recording start: {e}")
+            import traceback
+            traceback.print_exc()
+            await self.stop_recording()
+            if self.error_callback:
+                self.error_callback(PipelineError(f"Recording start failed: {e}", e))
+            raise PipelineError(f"Failed to start recording: {e}") from e
     
     async def stop_recording(self) -> None:
-        """Stop audio recording and transcription."""
+        """Stop audio recording and transcription with improved error handling."""
         logger.info("🛑 AudioProcessor: stop_recording() called")
         logger.info(f"🛑 AudioProcessor: Current is_running state: {self.is_running}")
         
@@ -155,89 +193,35 @@ class AudioProcessor:
         logger.info("🛑 AudioProcessor: Stopping audio recording...")
         self.is_running = False
         
+        # Use error handler for safe cleanup with individual timeouts
+        cleanup_operations = {
+            "capture_provider_stop": self._stop_capture_provider,
+            "capture_task_cancel": self._cancel_capture_task,
+            "transcription_task_cancel": self._cancel_transcription_task,
+            "transcription_provider_stop": self._stop_transcription_provider
+        }
+        
         try:
-            # PRIORITY 1: Stop PyAudio capture provider immediately to prevent more audio data
-            logger.info("🛑 AudioProcessor: Stopping PyAudio capture provider first...")
-            try:
-                if self.capture_provider:
-                    logger.info(f"🛑 AudioProcessor: Stopping capture provider - Type: {type(self.capture_provider).__name__}")
-                    logger.info(f"🛑 AudioProcessor: Capture provider state: {hasattr(self.capture_provider, '_stop_event')}")
-                    
-                    # Log provider instance details
-                    if hasattr(self.capture_provider, '_instance_id'):
-                        logger.info(f"🛑 AudioProcessor: Calling stop_capture() on provider instance {self.capture_provider._instance_id}")
-                        if hasattr(self.capture_provider, '_stop_event'):
-                            logger.info(f"🛑 AudioProcessor: Provider instance {self.capture_provider._instance_id} stop event ID: {id(self.capture_provider._stop_event)}")
-                    
-                    await self.capture_provider.stop_capture()
-                    logger.info("🛑 AudioProcessor: Capture provider stopped")
-                else:
-                    logger.warning("⚠️ AudioProcessor: No capture provider to stop")
-            except Exception as e:
-                logger.error(f"❌ AudioProcessor: Error stopping capture provider: {e}")
-                import traceback
-                traceback.print_exc()
+            cleanup_results = await self.error_handler.safe_cleanup(
+                cleanup_operations,
+                timeout_per_operation=3.0
+            )
             
-            # PRIORITY 2: Cancel capture task (should be quick now that provider is stopped)
-            logger.info("🛑 AudioProcessor: Cancelling capture task...")
-            if self._capture_task and not self._capture_task.done():
-                logger.info("🛑 AudioProcessor: Cancelling capture task")
-                self._capture_task.cancel()
-                try:
-                    # Wait for capture task with timeout to prevent hanging
-                    await asyncio.wait_for(self._capture_task, timeout=1.0)
-                    logger.info("🛑 AudioProcessor: Capture task cancelled successfully")
-                except asyncio.CancelledError:
-                    logger.info("🛑 AudioProcessor: Capture task cancelled")
-                except asyncio.TimeoutError:
-                    logger.warning("⚠️ AudioProcessor: Capture task cancellation timed out")
-                except Exception as e:
-                    logger.warning(f"⚠️ AudioProcessor: Error cancelling capture task: {e}")
+            # Check if any critical cleanup failed
+            failed_cleanups = [op for op, success in cleanup_results.items() if not success]
             
-            # Always clear the task reference to prevent "Task was destroyed but it is pending" error
-            self._capture_task = None
-            
-            # PRIORITY 3: Handle transcription cleanup (may hang, but PyAudio is already stopped)
-            logger.info("🛑 AudioProcessor: Handling transcription cleanup...")
-            if self._transcription_task and not self._transcription_task.done():
-                logger.info("🛑 AudioProcessor: Cancelling transcription task")
-                self._transcription_task.cancel()
-                try:
-                    # Wait for transcription task with timeout to prevent hanging
-                    await asyncio.wait_for(self._transcription_task, timeout=2.0)
-                    logger.info("🛑 AudioProcessor: Transcription task cancelled successfully")
-                except asyncio.CancelledError:
-                    logger.info("🛑 AudioProcessor: Transcription task cancelled")
-                except asyncio.TimeoutError:
-                    logger.warning("⚠️ AudioProcessor: Transcription task cancellation timed out")
-                except Exception as e:
-                    logger.warning(f"⚠️ AudioProcessor: Error cancelling transcription task: {e}")
-            
-            # Always clear the task reference to prevent "Task was destroyed but it is pending" error
-            self._transcription_task = None
-            
-            # PRIORITY 4: Stop transcription provider (may hang, but PyAudio is already stopped)
-            try:
-                if self.transcription_provider:
-                    logger.info(f"🛑 AudioProcessor: Stopping transcription provider - Type: {type(self.transcription_provider).__name__}")
-                    await asyncio.wait_for(self.transcription_provider.stop_stream(), timeout=2.0)
-                    logger.info("🛑 AudioProcessor: Transcription provider stopped")
-                else:
-                    logger.warning("⚠️ AudioProcessor: No transcription provider to stop")
-            except asyncio.TimeoutError:
-                logger.warning("⚠️ AudioProcessor: Transcription provider stop timed out")
-            except Exception as e:
-                logger.error(f"❌ AudioProcessor: Error stopping transcription provider: {e}")
-                import traceback
-                traceback.print_exc()
+            if failed_cleanups:
+                logger.warning(f"⚠️ AudioProcessor: Some cleanup operations failed: {failed_cleanups}")
+                # Don't raise exception, as partial cleanup is better than no cleanup
             
             logger.info("✅ AudioProcessor: Audio recording stopped successfully")
             
         except Exception as e:
-            logger.error(f"❌ AudioProcessor: Error in stop_recording: {e}")
-            import traceback
-            traceback.print_exc()
-            raise
+            logger.error(f"❌ AudioProcessor: Error during stop_recording cleanup: {e}")
+            # Log error summary for debugging
+            error_summary = self.error_handler.get_error_summary()
+            logger.error(f"📊 AudioProcessor: Error handler summary: {error_summary}")
+            raise PipelineError(f"Failed to stop recording properly: {e}") from e
     
     async def _audio_capture_loop(self) -> None:
         """Main audio capture loop."""
@@ -270,7 +254,7 @@ class AudioProcessor:
         except Exception as e:
             logger.error(f"❌ AudioProcessor: Audio capture loop error: {e}")
             if self.error_callback:
-                self.error_callback(e)
+                self.error_callback(PipelineError(f"Audio capture loop failed: {e}", e))
         finally:
             logger.info(f"🔄 AudioProcessor: Audio capture loop stopped after processing {chunk_count} chunks")
     
@@ -308,9 +292,110 @@ class AudioProcessor:
         except Exception as e:
             logger.error(f"❌ AudioProcessor: Transcription loop error: {e}")
             if self.error_callback:
-                self.error_callback(e)
+                self.error_callback(PipelineError(f"Transcription loop failed: {e}", e))
         finally:
             logger.info(f"📝 Transcription loop stopped after processing {transcription_count} transcriptions")
+    
+    async def _stop_capture_provider(self) -> None:
+        """Stop audio capture provider."""
+        if not self.capture_provider:
+            logger.warning("⚠️ AudioProcessor: No capture provider to stop")
+            return
+        
+        logger.info(f"🛑 AudioProcessor: Stopping capture provider - Type: {type(self.capture_provider).__name__}")
+        
+        # Log provider instance details
+        if hasattr(self.capture_provider, '_instance_id'):
+            logger.info(f"🛑 AudioProcessor: Calling stop_capture() on provider instance {self.capture_provider._instance_id}")
+        
+        await self.capture_provider.stop_capture()
+        logger.info("🛑 AudioProcessor: Capture provider stopped")
+    
+    async def _cancel_capture_task(self) -> None:
+        """Cancel audio capture task."""
+        if not self._capture_task or self._capture_task.done():
+            logger.debug("🛑 AudioProcessor: No capture task to cancel")
+            return
+        
+        logger.info("🛑 AudioProcessor: Cancelling capture task")
+        self._capture_task.cancel()
+        
+        try:
+            await asyncio.wait_for(self._capture_task, timeout=1.0)
+            logger.info("🛑 AudioProcessor: Capture task cancelled successfully")
+        except asyncio.CancelledError:
+            logger.info("🛑 AudioProcessor: Capture task cancelled")
+        except asyncio.TimeoutError:
+            logger.warning("⚠️ AudioProcessor: Capture task cancellation timed out")
+        finally:
+            self._capture_task = None
+    
+    async def _cancel_transcription_task(self) -> None:
+        """Cancel transcription processing task."""
+        if not self._transcription_task or self._transcription_task.done():
+            logger.debug("🛑 AudioProcessor: No transcription task to cancel")
+            return
+        
+        logger.info("🛑 AudioProcessor: Cancelling transcription task")
+        self._transcription_task.cancel()
+        
+        try:
+            await asyncio.wait_for(self._transcription_task, timeout=2.0)
+            logger.info("🛑 AudioProcessor: Transcription task cancelled successfully")
+        except asyncio.CancelledError:
+            logger.info("🛑 AudioProcessor: Transcription task cancelled")
+        except asyncio.TimeoutError:
+            logger.warning("⚠️ AudioProcessor: Transcription task cancellation timed out")
+        finally:
+            self._transcription_task = None
+    
+    async def _stop_transcription_provider(self) -> None:
+        """Stop transcription provider."""
+        if not self.transcription_provider:
+            logger.warning("⚠️ AudioProcessor: No transcription provider to stop")
+            return
+        
+        logger.info(f"🛑 AudioProcessor: Stopping transcription provider - Type: {type(self.transcription_provider).__name__}")
+        await self.transcription_provider.stop_stream()
+        logger.info("🛑 AudioProcessor: Transcription provider stopped")
+    
+    def _emergency_cleanup_transcription(self) -> None:
+        """Emergency cleanup for transcription provider (non-async)."""
+        logger.warning("🚨 AudioProcessor: Emergency transcription cleanup triggered")
+        if hasattr(self.transcription_provider, 'emergency_stop'):
+            self.transcription_provider.emergency_stop()
+        else:
+            logger.warning("⚠️ AudioProcessor: No emergency_stop method on transcription provider")
+    
+    def _emergency_cleanup_capture(self) -> None:
+        """Emergency cleanup for capture provider (non-async)."""
+        logger.warning("🚨 AudioProcessor: Emergency capture cleanup triggered")
+        if hasattr(self.capture_provider, 'emergency_stop'):
+            self.capture_provider.emergency_stop()
+        else:
+            logger.warning("⚠️ AudioProcessor: No emergency_stop method on capture provider")
+    
+    async def _cleanup_providers(self) -> None:
+        """Clean up providers during initialization failure."""
+        cleanup_tasks = []
+        
+        if self.transcription_provider:
+            logger.info("🧹 AudioProcessor: Cleaning up transcription provider after init failure")
+            try:
+                await asyncio.wait_for(self.transcription_provider.stop_stream(), timeout=2.0)
+            except Exception as e:
+                logger.warning(f"⚠️ AudioProcessor: Error cleaning transcription provider: {e}")
+            finally:
+                self.transcription_provider = None
+        
+        if self.capture_provider:
+            logger.info("🧹 AudioProcessor: Cleaning up capture provider after init failure")
+            try:
+                await asyncio.wait_for(self.capture_provider.stop_capture(), timeout=2.0)
+            except Exception as e:
+                logger.warning(f"⚠️ AudioProcessor: Error cleaning capture provider: {e}")
+            finally:
+                self.capture_provider = None
     
     def set_transcription_callback(self, callback: Callable[[TranscriptionResult], None]) -> None:
         """Set callback function for new transcription results."""
@@ -362,5 +447,25 @@ class AudioProcessor:
                     'is_partial': t.is_partial
                 }
                 for t in self.session_transcripts
-            ]
+            ],
+            'error_summary': self.error_handler.get_error_summary()
+        }
+    
+    def get_pipeline_health(self) -> Dict[str, Any]:
+        """Get pipeline health status and error information."""
+        return {
+            'is_running': self.is_running,
+            'has_providers': {
+                'transcription': self.transcription_provider is not None,
+                'capture': self.capture_provider is not None
+            },
+            'has_tasks': {
+                'capture_task': self._capture_task is not None and not self._capture_task.done(),
+                'transcription_task': self._transcription_task is not None and not self._transcription_task.done()
+            },
+            'session_info': {
+                'meeting_id': self.current_meeting_id,
+                'transcript_count': len(self.session_transcripts)
+            },
+            'error_handler': self.error_handler.get_error_summary()
         }
