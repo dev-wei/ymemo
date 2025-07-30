@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-YMemo is a real-time voice meeting transcription application built with Gradio and AWS Transcribe. The application captures audio from microphones, sends it to AWS Transcribe for real-time speech-to-text conversion, and displays the results in a responsive web interface.
+YMemo is a real-time voice meeting transcription application built with Gradio and multiple transcription services (AWS Transcribe and Azure Speech Service). The application captures audio from microphones, sends it to your chosen transcription provider for real-time speech-to-text conversion, and displays the results in a responsive web interface with speaker diarization support.
 
 ## Development Setup
 
@@ -45,6 +45,11 @@ source .venv/bin/activate && python tests/test_core_functionality.py
 source .venv/bin/activate && python tests/create_test_audio.py
 ```
 
+### Test Azure Speech Provider
+```bash
+source .venv/bin/activate && python test_azure_speech_provider.py
+```
+
 ## Architecture Overview
 
 ### Core Components
@@ -55,9 +60,9 @@ source .venv/bin/activate && python tests/create_test_audio.py
 - `AudioProcessorFactory` - Factory pattern for creating transcription and capture providers
 
 **Provider Pattern:**
-- `TranscriptionProvider` - Interface for speech-to-text services (AWS Transcribe)
+- `TranscriptionProvider` - Interface for speech-to-text services (AWS Transcribe, Azure Speech Service)
 - `AudioCaptureProvider` - Interface for audio input sources (PyAudio, File)
-- Providers are swappable via factory configuration
+- Providers are swappable via factory configuration and environment variables
 
 **UI Architecture:**
 - `src/ui/interface.py` - Gradio-based responsive web interface
@@ -72,12 +77,14 @@ source .venv/bin/activate && python tests/create_test_audio.py
 
 **Factory Pattern:**
 - `AudioProcessorFactory` creates providers based on string names
-- Supports both transcription providers ('aws') and capture providers ('pyaudio', 'file')
+- Supports transcription providers ('aws', 'azure') and capture providers ('pyaudio', 'file')
+- Easy provider swapping via TRANSCRIPTION_PROVIDER environment variable
 
 **Provider Pattern:**
 - Abstract interfaces in `interfaces.py` allow swapping implementations
 - `FileAudioCaptureProvider` for testing without microphone hardware
-- `AWSTranscribeProvider` for real-time speech recognition
+- `AWSTranscribeProvider` for AWS real-time speech recognition with speaker diarization
+- `AzureSpeechProvider` for Azure Speech Service with speaker diarization support
 
 **Smart Partial Results:**
 - Tracks `utterance_id` and `sequence_number` to update partial results in-place
@@ -88,13 +95,24 @@ source .venv/bin/activate && python tests/create_test_audio.py
 
 **Environment Variables:**
 - `LOG_LEVEL` - Set logging level (DEBUG, INFO, WARNING, ERROR)
-- `TRANSCRIPTION_PROVIDER` - Choose transcription provider (default: 'aws')
+- `TRANSCRIPTION_PROVIDER` - Choose transcription provider ('aws' or 'azure', default: 'aws')
 - `CAPTURE_PROVIDER` - Choose audio capture provider (default: 'pyaudio')
+- `ENABLE_SPEAKER_DIARIZATION` - Enable speaker identification for AWS (true/false)
 
 **AWS Configuration:**
 - Requires AWS credentials configured (via ~/.aws/credentials or environment)
 - Default region: us-east-1
 - Default language: en-US
+- Speaker diarization: Set `ENABLE_SPEAKER_DIARIZATION=true`
+
+**Azure Speech Service Configuration:**
+- `AZURE_SPEECH_KEY` - Azure Speech Service API key (required)
+- `AZURE_SPEECH_REGION` - Azure region (default: 'eastus')
+- `AZURE_SPEECH_LANGUAGE` - Language code (default: 'en-US')
+- `AZURE_ENABLE_SPEAKER_DIARIZATION` - Enable speaker identification (default: false)
+- `AZURE_MAX_SPEAKERS` - Maximum speakers to detect (default: 4)
+- `AZURE_SPEECH_TIMEOUT` - Connection timeout in seconds (default: 30)
+- Requires `azure-cognitiveservices-speech>=1.45.0` dependency
 
 ## Testing Strategy
 
@@ -134,6 +152,7 @@ src/
 ├── audio/
 │   └── providers/           # Audio capture and transcription providers
 │       ├── aws_transcribe.py
+│       ├── azure_speech.py
 │       ├── file_audio_capture.py
 │       └── pyaudio_capture.py
 ├── core/                    # Core business logic and interfaces
@@ -184,6 +203,25 @@ src/
 - Partial results replace previous partials for same utterance
 - Final results replace all partials for that utterance
 
+## Azure Speech Service Integration
+
+**Provider Swapping:**
+- Set `TRANSCRIPTION_PROVIDER=azure` to use Azure instead of AWS
+- Seamless backend switching without code changes
+- Both providers implement the same `TranscriptionProvider` interface
+
+**Azure SDK Integration:**
+- Uses `azure-cognitiveservices-speech` SDK for real-time streaming
+- Event-driven architecture bridging Azure callbacks to async/await
+- Push audio stream for continuous recognition
+- Speaker diarization with configurable speaker limits
+
+**Azure-Specific Features:**
+- Real-time speech recognition with partial and final results
+- Speaker identification in format "Speaker 1", "Speaker 2", etc.
+- Connection health monitoring and automatic retry logic
+- Comprehensive error handling with Azure-specific exception classes
+
 ## Common Issues
 
 **Event Loop Conflicts:**
@@ -197,6 +235,12 @@ src/
 **Mobile Responsiveness:**
 - CSS media queries stack Live Dialog and Audio Controls vertically on narrow screens
 - Use `!important` declarations for mobile layout overrides
+- Meeting list layout restructured for proper vertical stacking of delete controls
+
+**UI Layout Issues:**
+- Meeting list delete controls positioned using column-based layout to prevent horizontal wrapping
+- Dataframe and delete controls separated into distinct containers with proper height constraints
+- Responsive design ensures consistent layout across all screen sizes
 
 **Application Execution:**
 - Never run python main.py, because it will hang as it is a website
