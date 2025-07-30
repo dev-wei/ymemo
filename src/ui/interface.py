@@ -18,6 +18,7 @@ from .interface_constants import (
     COPY_CONFIG, DURATION_FORMAT
 )
 from .interface_styles import APP_CSS, APP_JS
+from .button_state_manager import button_state_manager
 from .interface_handlers import (
     refresh_devices, start_recording, stop_recording, handle_transcription_update,
     get_latest_dialog_state, conditional_update, submit_new_meeting,
@@ -33,177 +34,6 @@ logger = logging.getLogger(__name__)
 # Utility functions moved to interface_utils.py
 
 
-def get_button_states(status: AudioStatus) -> dict:
-    """Get button configurations based on current recording status.
-    
-    Args:
-        status: Current AudioStatus
-        
-    Returns:
-        Dictionary with button configurations
-    """
-    if status in [AudioStatus.IDLE, AudioStatus.READY]:
-        # No recording, no completed recording
-        return {
-            "start_btn": {
-                "text": BUTTON_TEXT["start_recording"],
-                "variant": "primary",
-                "interactive": True,
-                "visible": True
-            },
-            "stop_btn": {
-                "text": BUTTON_TEXT["stop_recording"], 
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            },
-            "save_btn": {
-                "text": BUTTON_TEXT["save_meeting"],
-                "variant": "secondary", 
-                "interactive": False,
-                "visible": True
-            }
-        }
-    
-    elif status in [AudioStatus.INITIALIZING, AudioStatus.CONNECTING]:
-        # Starting up
-        return {
-            "start_btn": {
-                "text": BUTTON_TEXT["starting"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            },
-            "stop_btn": {
-                "text": BUTTON_TEXT["stop_recording"],
-                "variant": "secondary", 
-                "interactive": False,
-                "visible": True
-            },
-            "save_btn": {
-                "text": BUTTON_TEXT["save_meeting"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            }
-        }
-    
-    elif status in [AudioStatus.RECORDING, AudioStatus.TRANSCRIBING, AudioStatus.TRANSCRIPTION_DISCONNECTED, AudioStatus.RECONNECTING]:
-        # Recording in progress (including disconnected transcription and reconnection attempts)
-        return {
-            "start_btn": {
-                "text": BUTTON_TEXT["start_recording"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            },
-            "stop_btn": {
-                "text": BUTTON_TEXT["stop_recording"],
-                "variant": "primary",  # Primary variant for active stop
-                "interactive": True,
-                "visible": True
-            },
-            "save_btn": {
-                "text": BUTTON_TEXT["save_meeting"], 
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            }
-        }
-    
-    elif status == AudioStatus.STOPPING:
-        # Stop in progress
-        return {
-            "start_btn": {
-                "text": BUTTON_TEXT["start_recording"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            },
-            "stop_btn": {
-                "text": BUTTON_TEXT["stopping"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            },
-            "save_btn": {
-                "text": BUTTON_TEXT["save_meeting"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            }
-        }
-    
-    elif status == AudioStatus.STOPPED:
-        # Recording just completed - highlight save button
-        return {
-            "start_btn": {
-                "text": BUTTON_TEXT["start_recording"],
-                "variant": "secondary",
-                "interactive": True,
-                "visible": True
-            },
-            "stop_btn": {
-                "text": BUTTON_TEXT["stop_recording"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            },
-            "save_btn": {
-                "text": BUTTON_TEXT["save_meeting"],
-                "variant": "primary",  # Highlight the save button
-                "interactive": True,
-                "visible": True
-            }
-        }
-    
-    elif status == AudioStatus.ERROR:
-        # Error occurred - allow restart
-        return {
-            "start_btn": {
-                "text": BUTTON_TEXT["start_recording"],
-                "variant": "secondary",
-                "interactive": True,
-                "visible": True
-            },
-            "stop_btn": {
-                "text": BUTTON_TEXT["stop_recording"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            },
-            "save_btn": {
-                "text": BUTTON_TEXT["save_meeting"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            }
-        }
-    
-    else:
-        # Default fallback
-        return {
-            "start_btn": {
-                "text": BUTTON_TEXT["start_recording"],
-                "variant": "primary",
-                "interactive": True,
-                "visible": True
-            },
-            "stop_btn": {
-                "text": BUTTON_TEXT["stop_recording"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            },
-            "save_btn": {
-                "text": BUTTON_TEXT["save_meeting"],
-                "variant": "secondary",
-                "interactive": False,
-                "visible": True
-            }
-        }
-
-
 def update_button_states():
     """Update all button states based on current recording status.
     
@@ -212,35 +42,15 @@ def update_button_states():
     """
     try:
         current_status = status_manager.current_status
-        button_configs = get_button_states(current_status)
-        
-        return (
-            gr.update(
-                value=button_configs["start_btn"]["text"],
-                variant=button_configs["start_btn"]["variant"],
-                interactive=button_configs["start_btn"]["interactive"],
-                visible=button_configs["start_btn"]["visible"]
-            ),
-            gr.update(
-                value=button_configs["stop_btn"]["text"],
-                variant=button_configs["stop_btn"]["variant"],
-                interactive=button_configs["stop_btn"]["interactive"],
-                visible=button_configs["stop_btn"]["visible"]
-            ),
-            gr.update(
-                value=button_configs["save_btn"]["text"],
-                variant=button_configs["save_btn"]["variant"],
-                interactive=button_configs["save_btn"]["interactive"],
-                visible=button_configs["save_btn"]["visible"]
-            )
-        )
+        return button_state_manager.get_button_update_tuple(current_status)
     except Exception as e:
         logger.error(f"Error updating button states: {e}")
-        # Return safe defaults
+        # Return safe defaults using the manager
+        safe_updates = button_state_manager.get_safe_fallback_updates()
         return (
-            gr.update(value=BUTTON_TEXT["start_recording"], variant="primary", interactive=True),
-            gr.update(value=BUTTON_TEXT["stop_recording"], variant="secondary", interactive=False),
-            gr.update(value=BUTTON_TEXT["save_meeting"], variant="secondary", interactive=False)
+            safe_updates["start_btn"],
+            safe_updates["stop_btn"],
+            safe_updates["save_btn"]
         )
 
 
@@ -368,29 +178,29 @@ def create_controls():
             interactive=False
         )
         
-        # Control buttons - Initialize with proper states
+        # Control buttons - Initialize with proper states using ButtonStateManager
         current_status = status_manager.current_status
         logger.info(f"🔍 Current status: {current_status}")
-        initial_button_states = get_button_states(current_status)
-        logger.info(f"🔍 Start button interactive: {initial_button_states['start_btn']['interactive']}")
+        button_configs = button_state_manager.get_button_configs(current_status)
+        logger.info(f"🔍 Start button interactive: {button_configs['start_btn'].interactive}")
         
         with gr.Row():
             start_btn = gr.Button(
-                initial_button_states["start_btn"]["text"],
-                variant=initial_button_states["start_btn"]["variant"],
-                interactive=True  # Force interactive for debugging
+                button_configs["start_btn"].text,
+                variant=button_configs["start_btn"].variant,
+                interactive=button_configs["start_btn"].interactive
             )
             stop_btn = gr.Button(
-                initial_button_states["stop_btn"]["text"],
-                variant=initial_button_states["stop_btn"]["variant"],
-                interactive=initial_button_states["stop_btn"]["interactive"]
+                button_configs["stop_btn"].text,
+                variant=button_configs["stop_btn"].variant,
+                interactive=button_configs["stop_btn"].interactive
             )
         
         # Save meeting button
         save_meeting_btn = gr.Button(
-            initial_button_states["save_btn"]["text"],
-            variant=initial_button_states["save_btn"]["variant"],
-            interactive=initial_button_states["save_btn"]["interactive"]
+            button_configs["save_btn"].text,
+            variant=button_configs["save_btn"].variant,
+            interactive=button_configs["save_btn"].interactive
         )
         
         # Download transcript button

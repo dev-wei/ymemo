@@ -13,6 +13,7 @@ from src.managers.session_manager import get_audio_session
 from src.utils.status_manager import status_manager
 from .interface_utils import load_meetings_data, save_meeting_to_database
 from .interface_constants import DEFAULT_VALUES, AUDIO_CONFIG
+from .button_state_manager import button_state_manager
 from src.managers.meeting_repository import get_all_meetings, delete_meeting_by_id
 
 logger = logging.getLogger(__name__)
@@ -46,40 +47,17 @@ def get_device_choices_and_default():
 
 def update_button_states():
     """Update all button states based on current recording status."""
-    from .interface import get_button_states
-    
     try:
         current_status = status_manager.current_status
-        button_configs = get_button_states(current_status)
-        
-        return (
-            gr.update(
-                value=button_configs["start_btn"]["text"],
-                variant=button_configs["start_btn"]["variant"],
-                interactive=button_configs["start_btn"]["interactive"],
-                visible=button_configs["start_btn"]["visible"]
-            ),
-            gr.update(
-                value=button_configs["stop_btn"]["text"],
-                variant=button_configs["stop_btn"]["variant"],
-                interactive=button_configs["stop_btn"]["interactive"],
-                visible=button_configs["stop_btn"]["visible"]
-            ),
-            gr.update(
-                value=button_configs["save_btn"]["text"],
-                variant=button_configs["save_btn"]["variant"],
-                interactive=button_configs["save_btn"]["interactive"],
-                visible=button_configs["save_btn"]["visible"]
-            )
-        )
+        return button_state_manager.get_button_update_tuple(current_status)
     except Exception as e:
         logger.error(f"Error updating button states: {e}")
-        from .interface_constants import BUTTON_TEXT
-        # Return safe defaults
+        # Return safe defaults using the manager
+        safe_updates = button_state_manager.get_safe_fallback_updates()
         return (
-            gr.update(value=BUTTON_TEXT["start_recording"], variant="primary", interactive=True),
-            gr.update(value=BUTTON_TEXT["stop_recording"], variant="secondary", interactive=False),
-            gr.update(value=BUTTON_TEXT["save_meeting"], variant="secondary", interactive=False)
+            safe_updates["start_btn"],
+            safe_updates["stop_btn"],
+            safe_updates["save_btn"]
         )
 
 
