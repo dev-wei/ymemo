@@ -5,9 +5,10 @@ import logging
 from typing import Optional, Callable, List, Dict, Any
 from datetime import datetime
 
-from .interfaces import TranscriptionProvider, AudioCaptureProvider, AudioConfig, TranscriptionResult
+from .interfaces import TranscriptionProvider, AudioCaptureProvider, TranscriptionResult
 from .factory import AudioProcessorFactory
-from .pipeline_error_handler import PipelineErrorHandler, ErrorSeverity, RetryStrategy
+from .pipeline_error_handler import PipelineErrorHandler, ErrorSeverity
+from .resource_manager import ResourceManager
 from config.audio_config import get_config
 from ..utils.exceptions import PipelineError, PipelineTimeoutError
 
@@ -58,7 +59,12 @@ class AudioProcessor:
             base_retry_delay=error_config.get('base_retry_delay', 1.0)
         )
         
-        # Tasks
+        # Resource management
+        self.resource_manager = ResourceManager(
+            default_resource_timeout=error_config.get('resource_timeout', 5.0)
+        )
+        
+        # Tasks (managed by resource manager)
         self._capture_task: Optional[asyncio.Task] = None
         self._transcription_task: Optional[asyncio.Task] = None
         
@@ -93,6 +99,21 @@ class AudioProcessor:
                 # Log provider instance details
                 if hasattr(self.capture_provider, '_instance_id'):
                     logger.info(f"🔧 AudioProcessor: Using capture provider instance {self.capture_provider._instance_id}")
+                
+                # Register providers with resource manager
+                self.resource_manager.register_resource(
+                    "transcription_provider",
+                    self.transcription_provider,
+                    cleanup_func=self._cleanup_transcription_provider,
+                    timeout=8.0
+                )
+                
+                self.resource_manager.register_resource(
+                    "capture_provider", 
+                    self.capture_provider,
+                    cleanup_func=self._cleanup_capture_provider,
+                    timeout=5.0
+                )
                 
                 # Set up connection health monitoring for AWS Transcribe
                 if hasattr(self.transcription_provider, 'set_connection_health_callback') and self.connection_health_callback:
@@ -147,10 +168,26 @@ class AudioProcessor:
                 logger.debug("🎤 AudioProcessor: Starting audio capture...")
                 await self.capture_provider.start_capture(self.audio_config, device_id)
             
-            # Start processing tasks
-            logger.debug("🔄 AudioProcessor: Creating async tasks...")
-            self._capture_task = asyncio.create_task(self._audio_capture_loop())
-            self._transcription_task = asyncio.create_task(self._transcription_loop())
+            # Create managed tasks with proper lifecycle control
+            logger.debug("🔄 AudioProcessor: Creating managed async tasks...")
+            
+            capture_task = self.resource_manager.create_task(
+                "audio_capture",
+                self._audio_capture_loop(),
+                timeout=None,  # No timeout for main processing loop
+                cleanup_on_cancel=self._cleanup_capture_on_cancel
+            )
+            
+            transcription_task = self.resource_manager.create_task(
+                "transcription_processing",
+                self._transcription_loop(),
+                timeout=None,  # No timeout for main processing loop  
+                cleanup_on_cancel=self._cleanup_transcription_on_cancel
+            )
+            
+            # Store task references for compatibility
+            self._capture_task = capture_task.task
+            self._transcription_task = transcription_task.task
             
             self.is_running = True
             logger.info(f"✅ AudioProcessor: Started recording for meeting: {self.current_meeting_id}")
@@ -193,17 +230,9 @@ class AudioProcessor:
         logger.info("🛑 AudioProcessor: Stopping audio recording...")
         self.is_running = False
         
-        # Use error handler for safe cleanup with individual timeouts
-        cleanup_operations = {
-            "capture_provider_stop": self._stop_capture_provider,
-            "capture_task_cancel": self._cancel_capture_task,
-            "transcription_task_cancel": self._cancel_transcription_task,
-            "transcription_provider_stop": self._stop_transcription_provider
-        }
-        
+        # Use resource manager for coordinated cleanup
         try:
-            cleanup_results = await self.error_handler.safe_cleanup(
-                cleanup_operations,
+            cleanup_results = await self.resource_manager.cleanup_all(
                 timeout_per_operation=3.0
             )
             
@@ -214,13 +243,19 @@ class AudioProcessor:
                 logger.warning(f"⚠️ AudioProcessor: Some cleanup operations failed: {failed_cleanups}")
                 # Don't raise exception, as partial cleanup is better than no cleanup
             
+            # Clear task references after cleanup
+            self._capture_task = None
+            self._transcription_task = None
+            
             logger.info("✅ AudioProcessor: Audio recording stopped successfully")
             
         except Exception as e:
             logger.error(f"❌ AudioProcessor: Error during stop_recording cleanup: {e}")
-            # Log error summary for debugging
+            # Log error and resource manager status for debugging
             error_summary = self.error_handler.get_error_summary()
+            resource_status = self.resource_manager.get_status()
             logger.error(f"📊 AudioProcessor: Error handler summary: {error_summary}")
+            logger.error(f"📊 AudioProcessor: Resource manager status: {resource_status}")
             raise PipelineError(f"Failed to stop recording properly: {e}") from e
     
     async def _audio_capture_loop(self) -> None:
@@ -296,68 +331,34 @@ class AudioProcessor:
         finally:
             logger.info(f"📝 Transcription loop stopped after processing {transcription_count} transcriptions")
     
-    async def _stop_capture_provider(self) -> None:
-        """Stop audio capture provider."""
-        if not self.capture_provider:
-            logger.warning("⚠️ AudioProcessor: No capture provider to stop")
-            return
-        
-        logger.info(f"🛑 AudioProcessor: Stopping capture provider - Type: {type(self.capture_provider).__name__}")
+    async def _cleanup_transcription_provider(self, provider) -> None:
+        """Cleanup function for transcription provider."""
+        logger.info(f"🧹 AudioProcessor: Cleaning up transcription provider - Type: {type(provider).__name__}")
+        await provider.stop_stream()
+        logger.info("✅ AudioProcessor: Transcription provider cleanup completed")
+    
+    async def _cleanup_capture_provider(self, provider) -> None:
+        """Cleanup function for capture provider."""
+        logger.info(f"🧹 AudioProcessor: Cleaning up capture provider - Type: {type(provider).__name__}")
         
         # Log provider instance details
-        if hasattr(self.capture_provider, '_instance_id'):
-            logger.info(f"🛑 AudioProcessor: Calling stop_capture() on provider instance {self.capture_provider._instance_id}")
+        if hasattr(provider, '_instance_id'):
+            logger.info(f"🧹 AudioProcessor: Calling stop_capture() on provider instance {provider._instance_id}")
         
-        await self.capture_provider.stop_capture()
-        logger.info("🛑 AudioProcessor: Capture provider stopped")
+        await provider.stop_capture()
+        logger.info("✅ AudioProcessor: Capture provider cleanup completed")
     
-    async def _cancel_capture_task(self) -> None:
-        """Cancel audio capture task."""
-        if not self._capture_task or self._capture_task.done():
-            logger.debug("🛑 AudioProcessor: No capture task to cancel")
-            return
-        
-        logger.info("🛑 AudioProcessor: Cancelling capture task")
-        self._capture_task.cancel()
-        
-        try:
-            await asyncio.wait_for(self._capture_task, timeout=1.0)
-            logger.info("🛑 AudioProcessor: Capture task cancelled successfully")
-        except asyncio.CancelledError:
-            logger.info("🛑 AudioProcessor: Capture task cancelled")
-        except asyncio.TimeoutError:
-            logger.warning("⚠️ AudioProcessor: Capture task cancellation timed out")
-        finally:
-            self._capture_task = None
+    def _cleanup_capture_on_cancel(self) -> None:
+        """Cleanup function called when capture task is cancelled."""
+        logger.info("🧹 AudioProcessor: Capture task cleanup on cancellation")
+        # Any non-async cleanup can be done here
+        # Async cleanup is handled by the resource manager
     
-    async def _cancel_transcription_task(self) -> None:
-        """Cancel transcription processing task."""
-        if not self._transcription_task or self._transcription_task.done():
-            logger.debug("🛑 AudioProcessor: No transcription task to cancel")
-            return
-        
-        logger.info("🛑 AudioProcessor: Cancelling transcription task")
-        self._transcription_task.cancel()
-        
-        try:
-            await asyncio.wait_for(self._transcription_task, timeout=2.0)
-            logger.info("🛑 AudioProcessor: Transcription task cancelled successfully")
-        except asyncio.CancelledError:
-            logger.info("🛑 AudioProcessor: Transcription task cancelled")
-        except asyncio.TimeoutError:
-            logger.warning("⚠️ AudioProcessor: Transcription task cancellation timed out")
-        finally:
-            self._transcription_task = None
-    
-    async def _stop_transcription_provider(self) -> None:
-        """Stop transcription provider."""
-        if not self.transcription_provider:
-            logger.warning("⚠️ AudioProcessor: No transcription provider to stop")
-            return
-        
-        logger.info(f"🛑 AudioProcessor: Stopping transcription provider - Type: {type(self.transcription_provider).__name__}")
-        await self.transcription_provider.stop_stream()
-        logger.info("🛑 AudioProcessor: Transcription provider stopped")
+    def _cleanup_transcription_on_cancel(self) -> None:
+        """Cleanup function called when transcription task is cancelled."""
+        logger.info("🧹 AudioProcessor: Transcription task cleanup on cancellation")
+        # Any non-async cleanup can be done here
+        # Async cleanup is handled by the resource manager
     
     def _emergency_cleanup_transcription(self) -> None:
         """Emergency cleanup for transcription provider (non-async)."""
@@ -377,8 +378,6 @@ class AudioProcessor:
     
     async def _cleanup_providers(self) -> None:
         """Clean up providers during initialization failure."""
-        cleanup_tasks = []
-        
         if self.transcription_provider:
             logger.info("🧹 AudioProcessor: Cleaning up transcription provider after init failure")
             try:
@@ -448,7 +447,8 @@ class AudioProcessor:
                 }
                 for t in self.session_transcripts
             ],
-            'error_summary': self.error_handler.get_error_summary()
+            'error_summary': self.error_handler.get_error_summary(),
+            'resource_summary': self.resource_manager.get_status()
         }
     
     def get_pipeline_health(self) -> Dict[str, Any]:
@@ -467,5 +467,6 @@ class AudioProcessor:
                 'meeting_id': self.current_meeting_id,
                 'transcript_count': len(self.session_transcripts)
             },
-            'error_handler': self.error_handler.get_error_summary()
+            'error_handler': self.error_handler.get_error_summary(),
+            'resource_manager': self.resource_manager.get_status()
         }
