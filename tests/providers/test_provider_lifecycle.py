@@ -95,6 +95,9 @@ class TestProviderFactory(BaseTest):
             
             async def stop_stream(self):
                 pass
+            
+            def get_required_channels(self) -> int:
+                return 1  # Mock provider uses mono
         
         class MockCaptureProvider(AudioCaptureProvider):
             def __init__(self, **kwargs):
@@ -531,7 +534,7 @@ class TestAudioProcessorProviderIntegration(BaseIntegrationTest):
     async def test_mock_provider_integration(self):
         """Test integration with fully mocked providers to avoid timeouts."""
         # Create mock providers that implement the full interface
-        class MockTranscriptionProvider:
+        class MockTranscriptionProvider(TranscriptionProvider):
             def __init__(self):
                 self.started = False
                 
@@ -554,6 +557,9 @@ class TestAudioProcessorProviderIntegration(BaseIntegrationTest):
                 
             async def stop_stream(self):
                 self.started = False
+            
+            def get_required_channels(self) -> int:
+                return 1  # Mock provider uses mono
         
         class MockCaptureProvider:
             def __init__(self):

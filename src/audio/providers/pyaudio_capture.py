@@ -49,6 +49,9 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
         self._stop_event = threading.Event()
         self._is_active = False  # Track active state
         
+        # Store source channels for direct audio streaming
+        self._source_channels = None  # Will be set from audio config
+        
         # Instance tracking for debugging
         self._instance_id = id(self)
         logger.info(f"🏗️ PyAudio: Created new instance {self._instance_id} with default_device={device_index}")
@@ -74,6 +77,65 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
             logger.debug("✅ PyAudio: Availability validation successful")
         except Exception as e:
             raise AudioCaptureError(f"PyAudio not available or not working: {e}") from e
+    
+    
+    async def _optimize_config_for_device(self, audio_config: AudioConfig, device_id: Optional[int]) -> AudioConfig:
+        """
+        Optimize audio configuration for specific device capabilities.
+        
+        Args:
+            audio_config: Original audio configuration
+            device_id: Target device ID
+            
+        Returns:
+            Optimized AudioConfig with device-appropriate settings
+        """
+        try:
+            from ...utils.device_utils import validate_device_config
+            
+            # If no specific device, use original config
+            if device_id is None:
+                logger.info("🔧 PyAudio: No specific device ID, using original config")
+                return audio_config
+            
+            # Validate and optimize configuration for the device
+            validation_result = validate_device_config(
+                device_index=device_id,
+                channels=audio_config.channels,
+                sample_rate=audio_config.sample_rate
+            )
+            
+            # Log any warnings
+            for warning in validation_result['warnings']:
+                logger.warning(f"⚠️ PyAudio: {warning}")
+            
+            # Log device information
+            device_info = validation_result['device_info']
+            if device_info:
+                logger.info(f"🎤 PyAudio: Target device info - {device_info['name']} "
+                           f"(max {device_info['max_input_channels']} channels, "
+                           f"default {int(device_info['default_sample_rate'])}Hz)")
+            
+            # Create optimized config
+            optimized_config = AudioConfig(
+                sample_rate=validation_result['sample_rate'],
+                channels=validation_result['channels'],
+                chunk_size=audio_config.chunk_size,
+                format=audio_config.format
+            )
+            
+            return optimized_config
+            
+        except Exception as e:
+            logger.error(f"❌ PyAudio: Config optimization failed: {e}")
+            logger.info("🔧 PyAudio: Falling back to mono configuration")
+            # Fallback to safe mono configuration
+            return AudioConfig(
+                sample_rate=audio_config.sample_rate,
+                channels=1,  # Safe fallback
+                chunk_size=audio_config.chunk_size,
+                format=audio_config.format
+            )
     
     async def start_capture(self, audio_config: AudioConfig, device_id: Optional[int] = None) -> None:
         """
@@ -105,6 +167,12 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
             target_device = device_id if device_id is not None else self.default_device_index
             
             logger.info(f"🎤 PyAudio: Initializing capture on device_id={target_device}")
+            
+            # Note: Audio config should already be optimized by AudioProcessor
+            logger.debug(f"🎛️ PyAudio: Using provided config: {audio_config.channels} channels, {audio_config.sample_rate}Hz")
+            
+            # Store source channels for audio processing
+            self._source_channels = audio_config.channels
             
             # Initialize PyAudio if not already done
             if not self.audio:
@@ -152,9 +220,34 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
             logger.info(f"🎤 PyAudio: Capture thread started - Instance: {self._instance_id}, Thread: {self._capture_thread.name}")
             
         except Exception as e:
-            logger.error(f"Failed to start audio capture: {e}")
+            error_msg = str(e)
+            
+            # Enhanced error messages for common issues
+            if "Invalid number of channels" in error_msg or "-9998" in error_msg:
+                from ...utils.device_utils import get_device_max_channels
+                try:
+                    max_channels = get_device_max_channels(device_id) if device_id is not None else "unknown"
+                    enhanced_msg = (
+                        f"Audio device channel mismatch: Requested {audio_config.channels} channels, "
+                        f"but device {device_id} supports maximum {max_channels} channels. "
+                        f"Original error: {error_msg}"
+                    )
+                except:
+                    enhanced_msg = f"Audio device channel mismatch: {error_msg}"
+                
+                logger.error(f"❌ PyAudio: {enhanced_msg}")
+            elif "Invalid device" in error_msg or "-9996" in error_msg:
+                enhanced_msg = f"Audio device not available: Device {device_id} may be disconnected or in use by another application. Original error: {error_msg}"
+                logger.error(f"❌ PyAudio: {enhanced_msg}")
+            elif "Invalid sample rate" in error_msg or "-9997" in error_msg:
+                enhanced_msg = f"Audio sample rate not supported: Device {device_id} doesn't support {audio_config.sample_rate}Hz. Original error: {error_msg}"
+                logger.error(f"❌ PyAudio: {enhanced_msg}")
+            else:
+                enhanced_msg = f"Audio capture initialization failed: {error_msg}"
+                logger.error(f"❌ PyAudio: {enhanced_msg}")
+            
             await self._cleanup()
-            raise AudioCaptureError(f"Failed to start audio capture: {e}") from e
+            raise AudioCaptureError(enhanced_msg) from e
     
     def _capture_audio_thread(self, chunk_size: int) -> None:
         """Background thread for audio capture."""
@@ -205,6 +298,10 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
                     if self._stop_event.is_set():
                         logger.info("🛑 PyAudio Thread: Stop event detected after read, breaking")
                         break
+                    
+                    # Send audio data directly without any channel processing
+                    # 1-channel devices: Send mono audio to AWS Transcribe
+                    # 2-channel devices: Send stereo audio to AWS Transcribe for dual-channel processing
                     
                     # Put data in queue (thread-safe) - only if not stopping
                     if not self._stop_event.is_set():

@@ -266,6 +266,38 @@ class TranscriptionProvider(ABC):
                 await provider.stop_stream()  # Always cleanup
         """
         pass
+    
+    @abstractmethod
+    def get_required_channels(self) -> int:
+        """
+        Get the number of audio channels required by this transcription provider.
+        
+        This method indicates how many audio channels the provider can effectively
+        utilize for transcription. It helps the audio processing pipeline determine
+        optimal channel conversion strategies.
+        
+        Returns:
+            int: Number of channels the provider supports/requires
+                - 1: Mono transcription (most providers)
+                - 2: Dual-channel with speaker separation (AWS Transcribe, Azure)
+                - >2: Multi-channel support (rare, advanced providers)
+                
+        Note:
+            - This is used by the AudioChannelProcessor to optimize channel conversion
+            - For providers supporting channel identification (speaker separation),
+              returning 2 enables intelligent channel grouping for better speaker isolation
+            - Most speech-to-text services work best with 1 or 2 channels
+            
+        Example:
+            # AWS Transcribe with channel identification
+            def get_required_channels(self) -> int:
+                return 2  # Supports dual-channel with speaker separation
+                
+            # OpenAI Whisper (mono only)
+            def get_required_channels(self) -> int:
+                return 1  # Mono transcription only
+        """
+        pass
 
 
 class AudioCaptureProvider(ABC):

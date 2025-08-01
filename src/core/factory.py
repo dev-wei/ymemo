@@ -53,7 +53,7 @@ class AudioProcessorFactory:
     
     # Registry of available transcription providers
     TRANSCRIPTION_PROVIDERS: Dict[str, Type[TranscriptionProvider]] = {
-        'aws': AWSTranscribeProvider,
+        'aws': AWSTranscribeProvider,  # Now handles both single and dual connections intelligently
         'azure': AzureSpeechProvider,
     }
     
@@ -77,10 +77,10 @@ class AudioProcessorFactory:
         
         Args:
             provider_name: Name of the provider. Currently supported:
-                         - 'aws': AWS Transcribe service
+                         - 'aws': AWS Transcribe service (intelligent single/dual connection switching)
                          - 'azure': Azure Speech service
             **config: Provider-specific configuration parameters:
-                     For AWS: region, language_code, profile_name
+                     For AWS: region, language_code, profile_name, connection_strategy, dual_fallback_enabled, channel_balance_threshold, dual_connection_test_mode
                      For Azure: speech_key, region, language_code, enable_speaker_diarization
             
         Returns:
@@ -117,6 +117,20 @@ class AudioProcessorFactory:
         
         try:
             logger.info(f"🏭 Factory: Creating transcription provider '{provider_name}' with config keys: {list(config.keys())}")
+            
+            # Enhanced logging for AWS provider configuration
+            if provider_name == 'aws' and config:
+                audio_saving_enabled = config.get('dual_save_split_audio') or config.get('dual_save_raw_audio')
+                if audio_saving_enabled:
+                    logger.info(f"🎵 Factory: AWS provider audio saving configuration:")
+                    logger.info(f"   🔀 Split audio: {config.get('dual_save_split_audio', False)}")
+                    logger.info(f"   🎵 Raw audio: {config.get('dual_save_raw_audio', False)}")
+                    logger.info(f"   📁 Save path: {config.get('dual_audio_save_path', 'N/A')}")
+                    logger.info(f"   ⏱️  Duration: {config.get('dual_audio_save_duration', 'N/A')}s")
+                    logger.info(f"   🧪 Test mode: {config.get('dual_connection_test_mode', 'N/A')}")
+                else:
+                    logger.info(f"🎵 Factory: AWS provider audio saving is DISABLED")
+            
             instance = provider_class(**config)
             logger.info(f"✅ Factory: Successfully created {provider_name} transcription provider")
             return instance

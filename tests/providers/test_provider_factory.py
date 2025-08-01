@@ -41,6 +41,9 @@ class MockTranscriptionProvider(TranscriptionProvider):
     
     async def stop_stream(self):
         self.started = False
+    
+    def get_required_channels(self) -> int:
+        return 1  # Mock provider uses mono for simplicity
 
 
 class MockAudioCaptureProvider(AudioCaptureProvider):
@@ -115,6 +118,7 @@ class TestAudioProcessorFactory(BaseTest):
             async def send_audio(self, audio_chunk): pass
             async def get_transcription(self): yield None
             async def stop_stream(self): pass
+            def get_required_channels(self) -> int: return 1
         
         # Register new provider
         self.factory.register_transcription_provider("test", TestProvider)
@@ -256,6 +260,7 @@ class TestAudioProcessorFactory(BaseTest):
             async def send_audio(self, audio_chunk): pass
             async def get_transcription(self): yield None
             async def stop_stream(self): pass
+            def get_required_channels(self) -> int: return 1
         
         self.factory.register_transcription_provider("failing", FailingProvider)
         
@@ -436,6 +441,7 @@ class TestProviderFactoryIntegration(BaseAsyncTest):
             async def send_audio(self, audio_chunk): pass
             async def get_transcription(self): yield None
             async def stop_stream(self): pass
+            def get_required_channels(self) -> int: return 1
         
         factory = AudioProcessorFactory()
         factory.register_transcription_provider("failing_async", FailingAsyncProvider)

@@ -8,7 +8,7 @@ from datetime import datetime
 
 import gradio as gr
 
-from src.utils.device_utils import get_audio_devices, get_default_device_index
+from src.utils.device_utils import get_supported_audio_devices, get_default_device_index
 from src.managers.session_manager import get_audio_session
 from src.utils.status_manager import status_manager
 from .interface_utils import load_meetings_data, save_meeting_to_database
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 def get_device_choices_and_default():
     """Get current audio device choices and default selection."""
     try:
-        devices = get_audio_devices(refresh=True)
+        devices = get_supported_audio_devices(refresh=True)
         if not devices:
             return [(DEFAULT_VALUES["no_devices"], -1)], -1
         

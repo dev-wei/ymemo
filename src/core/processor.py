@@ -213,6 +213,16 @@ class AudioProcessor:
             # Start pipeline monitoring for this session
             self.pipeline_monitor.start_monitoring(self.current_meeting_id)
             
+            # Create device-optimized audio config first
+            system_config = get_config()
+            optimized_audio_config = system_config.get_device_optimized_audio_config(device_id)
+            
+            logger.info(f"🎛️ AudioProcessor: Using optimized config for device {device_id}: "
+                       f"{optimized_audio_config.sample_rate}Hz, {optimized_audio_config.channels}ch, {optimized_audio_config.format}")
+            
+            # Log channel processing strategy info
+            logger.info("🔧 AudioProcessor: Channel processing strategy - 1ch→1ch(mono), 2ch→1ch(auto/single) or 2ch(dual), 3-4ch→2ch(dual), >4ch→error")
+            
             # Start transcription stream with error handling
             async with self.error_handler.handle_pipeline_operation(
                 "transcription_start",
@@ -221,7 +231,42 @@ class AudioProcessor:
                 cleanup_callback=lambda: self._emergency_cleanup_transcription()
             ):
                 logger.debug("🎯 AudioProcessor: Starting transcription stream...")
-                await self.transcription_provider.start_stream(self.audio_config)
+                
+                # Determine processed channel count based on connection strategy and channel processing strategy
+                capture_channels = optimized_audio_config.channels
+                
+                # Check if dual connection strategy is explicitly requested (reuse existing system_config)
+                dual_strategy_requested = system_config.aws_connection_strategy == 'dual'
+                
+                if capture_channels == 1:
+                    # 1 channel → always mono
+                    processed_channels = 1
+                elif capture_channels == 2:
+                    if dual_strategy_requested:
+                        # 2 channels with dual strategy → preserve as dual-channel for channel splitting
+                        processed_channels = 2
+                        logger.info("🔀 AudioProcessor: Preserving 2 channels for dual connection strategy")
+                    else:
+                        # 2 channels with auto/single strategy → convert to mono
+                        processed_channels = 1
+                elif capture_channels <= 4:
+                    # 3-4 channels → will be processed to 2 channels (dual-channel)
+                    processed_channels = 2
+                else:
+                    # >4 channels → not supported, should have been caught earlier
+                    raise ValueError(f"Unsupported channel count: {capture_channels}. Maximum 4 channels supported.")
+                
+                # Create transcription config with processed channel count
+                from .interfaces import AudioConfig
+                transcription_config = AudioConfig(
+                    sample_rate=optimized_audio_config.sample_rate,
+                    channels=processed_channels,  # Use processed channel count
+                    chunk_size=optimized_audio_config.chunk_size,
+                    format=optimized_audio_config.format
+                )
+                
+                logger.info(f"🔧 AudioProcessor: Transcription config - capture: {capture_channels}ch → processed: {processed_channels}ch")
+                await self.transcription_provider.start_stream(transcription_config)
             
             # Start audio capture with error handling
             async with self.error_handler.handle_pipeline_operation(
@@ -236,7 +281,7 @@ class AudioProcessor:
                 if hasattr(self.capture_provider, 'is_active') and self.capture_provider.is_active():
                     logger.warning("⚠️ AudioProcessor: Capture provider already active, will be reset automatically")
                     
-                await self.capture_provider.start_capture(self.audio_config, device_id)
+                await self.capture_provider.start_capture(optimized_audio_config, device_id)
             
             # Create managed tasks with proper lifecycle control
             logger.debug("🔄 AudioProcessor: Creating managed async tasks...")

@@ -15,8 +15,8 @@ class TestDeviceSelectionFormat(BaseTest):
     """Test device selection format and validation using new infrastructure."""
     
     @pytest.mark.integration
-    @patch('src.ui.interface_handlers.get_audio_devices')
-    @patch('src.ui.interface_handlers.get_default_device_index')
+    @patch('src.utils.device_utils.get_supported_audio_devices')
+    @patch('src.utils.device_utils.get_default_device_index')
     def test_device_selection_format(self, mock_default_device, mock_get_devices):
         """Test device selection returns correct format with mocked devices."""
         # Mock device data
@@ -92,7 +92,7 @@ class TestDeviceSelectionFormat(BaseTest):
             return False
     
     @pytest.mark.integration
-    @patch('src.ui.interface_handlers.get_audio_devices')
+    @patch('src.ui.interface_handlers.get_supported_audio_devices')
     def test_empty_device_handling(self, mock_get_devices):
         """Test handling of empty device lists."""
         # Test empty device list
@@ -128,8 +128,8 @@ class TestDeviceSelectionLogic(BaseIntegrationTest):
     """Test device selection logic using new infrastructure."""
     
     @pytest.mark.integration
-    @patch('src.ui.interface_handlers.get_audio_devices')
-    @patch('src.ui.interface_handlers.get_default_device_index')
+    @patch('src.utils.device_utils.get_supported_audio_devices')
+    @patch('src.utils.device_utils.get_default_device_index')
     def test_device_selection_logic(self, mock_default_device, mock_get_devices):
         """Test device selection logic with mocked devices."""
         # Setup mock devices
@@ -203,7 +203,7 @@ class TestSpecificDeviceIssues(BaseIntegrationTest):
     """Test specific device issues and edge cases."""
     
     @pytest.mark.integration
-    @patch('src.ui.interface_handlers.get_audio_devices')
+    @patch('src.utils.device_utils.get_supported_audio_devices')
     def test_loopback_audio_device_issue(self, mock_get_devices):
         """Test the specific 'Loopback Audio' device issue."""
         # Mock devices including problematic loopback device
@@ -241,7 +241,7 @@ class TestSpecificDeviceIssues(BaseIntegrationTest):
             pytest.skip(f"Device selection module not available: {e}")
     
     @pytest.mark.integration
-    @patch('src.ui.interface_handlers.get_audio_devices')
+    @patch('src.utils.device_utils.get_supported_audio_devices')
     def test_unicode_device_names(self, mock_get_devices):
         """Test handling of device names with unicode characters."""
         # Mock devices with unicode names
@@ -269,7 +269,7 @@ class TestSpecificDeviceIssues(BaseIntegrationTest):
             pytest.skip(f"Device selection module not available: {e}")
     
     @pytest.mark.integration
-    @patch('src.ui.interface_handlers.get_audio_devices')
+    @patch('src.ui.interface_handlers.get_supported_audio_devices')
     def test_duplicate_device_names(self, mock_get_devices):
         """Test handling of duplicate device names with different indices."""
         # Mock devices with duplicate names (common with multiple USB devices)

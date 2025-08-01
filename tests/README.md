@@ -7,8 +7,8 @@ This document provides comprehensive documentation for the YMemo test suite, whi
 ## Overview
 
 **Migration Results:**
-- **95 tests** across 7 core files with **100% pass rate**
-- **<6 seconds execution time** (10x performance improvement)
+- **157 tests** across 12 core files with **99.4% pass rate** (1 skipped)
+- **~8 seconds execution time** (7.5x performance improvement)
 - **Zero hardware dependencies** - all tests run without PyAudio/AWS/device access
 - **Centralized infrastructure** with base classes, fixtures, and mock factories
 - **CI/CD ready** - tests run consistently in any environment
@@ -17,17 +17,23 @@ This document provides comprehensive documentation for the YMemo test suite, whi
 
 ```
 tests/
-├── providers/                    # Provider functionality tests (47 tests)
+├── providers/                    # Provider functionality tests (64 tests)
 │   ├── test_provider_factory.py      # Factory pattern & registration (19 tests)
 │   ├── test_provider_lifecycle.py    # Lifecycle management (17 tests)
-│   └── test_provider_error_handling.py # Error handling patterns (11 tests)
+│   ├── test_provider_error_handling.py # Error handling patterns (11 tests)
+│   ├── test_azure_provider.py        # Azure Speech Service integration (17 tests)
+│   └── test_dual_provider_system.py  # Dual AWS Transcribe architecture (17 tests)
 ├── aws/                         # AWS integration tests (9 tests)
 │   └── test_aws_connection.py        # AWS connection & streaming mocking (9 tests)
-├── audio/                       # Audio device tests (10 tests)
-│   └── test_device_selection.py      # Device selection & validation (10 tests)
+├── audio/                       # Audio device tests (39 tests)
+│   ├── test_device_selection.py      # Device selection & validation (10 tests)
+│   └── test_device_capability.py     # Device capability testing (29 tests)
 ├── unit/                        # Core unit tests (29 tests)
 │   ├── test_enhanced_session_manager.py  # Enhanced session management (17 tests)
 │   └── test_session_manager_stop.py      # Stop functionality (12 tests)
+├── config/                      # Configuration system tests (16 tests)
+│   ├── test_audio_config_validation.py   # Configuration validation (8 tests)
+│   └── test_configuration_parsing.py     # Environment parsing (8 tests)
 ├── base/                        # Test infrastructure
 │   ├── __init__.py
 │   ├── base_test.py                  # BaseTest, BaseIntegrationTest
@@ -38,16 +44,12 @@ tests/
 │   ├── async_mocks.py                # Async testing utilities
 │   ├── aws_mocks.py                  # AWS mocking patterns
 │   └── test_configs.py               # Test configurations
-├── config/                      # Test configuration
-│   ├── __init__.py
-│   ├── test_configs.py               # Configuration objects
-│   └── test_constants.py             # Test constants
 └── conftest.py                  # Central pytest configuration
 ```
 
 ## Test Categories
 
-### 📁 **Provider Tests** (47 tests)
+### 📁 **Provider Tests** (64 tests)
 
 **Location**: `tests/providers/`
 
@@ -69,6 +71,20 @@ tests/
 - Provider failure scenarios
 - Graceful degradation patterns
 
+**test_azure_provider.py** (17 tests):
+- Azure Speech Service provider configuration
+- Provider creation and initialization
+- Azure SDK integration mocking
+- Language and timeout configuration
+- Authentication and network error handling
+
+**test_dual_provider_system.py** (17 tests):
+- Dual AWS Transcribe provider architecture
+- Channel splitting functionality
+- Stereo audio processing
+- Device compatibility testing
+- Performance and error handling
+
 ### ☁️ **AWS Integration Tests** (9 tests)
 
 **Location**: `tests/aws/`
@@ -80,7 +96,7 @@ tests/
 - Region configuration validation
 - Response handling patterns
 
-### 🎵 **Audio Device Tests** (10 tests)
+### 🎵 **Audio Device Tests** (39 tests)
 
 **Location**: `tests/audio/`
 
@@ -90,6 +106,13 @@ tests/
 - Unicode device name handling
 - Performance with large device lists
 - Status manager integration
+
+**test_device_capability.py** (29 tests):
+- Audio device capability detection
+- Format support validation
+- Hardware-independent device testing
+- Edge case handling for device quirks
+- Comprehensive device compatibility matrix
 
 ### 🔧 **Core Unit Tests** (29 tests)
 
@@ -108,6 +131,22 @@ tests/
 - Thread coordination and signaling
 - Resource cleanup validation
 - Error handling during stop operations
+
+### ⚙️ **Configuration System Tests** (16 tests)
+
+**Location**: `tests/config/`
+
+**test_audio_config_validation.py** (8 tests):
+- Environment variable parsing validation
+- Configuration object creation and validation  
+- Default value handling
+- Invalid value graceful handling
+
+**test_configuration_parsing.py** (8 tests):
+- Safe parsing of integer/float/boolean values
+- Error handling for malformed environment variables
+- Configuration merging and override behavior
+- Debug logging and configuration summary
 
 ## Infrastructure Components
 
@@ -190,23 +229,26 @@ pip install -r requirements.txt
 
 **Run All Migrated Tests:**
 ```bash
-# Complete migrated test suite (95 tests, <6 seconds)
-python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py -v
+# Complete migrated test suite (157 tests, ~8 seconds)
+python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ -v
 ```
 
 **Run by Category:**
 ```bash
-# Provider functionality tests (47 tests)
+# Provider functionality tests (64 tests)
 python -m pytest tests/providers/ -v
 
 # AWS integration tests (9 tests)  
 python -m pytest tests/aws/ -v
 
-# Audio/device tests (10 tests)
+# Audio/device tests (39 tests)
 python -m pytest tests/audio/ -v
 
 # Core unit tests (29 tests)
 python -m pytest tests/unit/ -v
+
+# Configuration system tests (16 tests)
+python -m pytest tests/config/ -v
 ```
 
 **Run Specific Files:**
@@ -225,12 +267,12 @@ python -m pytest tests/audio/test_device_selection.py -v
 
 **With Coverage:**
 ```bash
-python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py --cov=src --cov-report=html
+python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ --cov=src --cov-report=html
 ```
 
 **Parallel Execution:**
 ```bash
-python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py -n auto
+python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ -n auto
 ```
 
 **Verbose Output:**
@@ -247,7 +289,7 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 - **Reliable Execution**: Tests run consistently in any environment
 
 ### Performance
-- **Fast Execution**: Full test suite runs in <6 seconds
+- **Fast Execution**: Full test suite runs in ~8 seconds (157 tests)
 - **Efficient Mocking**: Optimized mock objects reduce overhead
 - **Parallel-Safe**: Tests can run concurrently without conflicts
 - **Resource Cleanup**: Automatic cleanup prevents memory leaks
@@ -259,7 +301,7 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 - **Comprehensive Documentation**: Every test class has detailed docstrings
 
 ### Quality Assurance
-- **100% Pass Rate**: All 95 tests pass reliably
+- **99.4% Pass Rate**: 157 tests pass reliably (1 skipped)
 - **Comprehensive Error Testing**: Proper validation of error conditions
 - **Async Support**: Full async testing infrastructure
 - **Integration Testing**: Real integration scenarios with proper mocking
@@ -274,15 +316,15 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 - Inconsistent unittest vs pytest patterns
 
 ### After Migration (Current)
-- **7 organized test files** with consistent pytest infrastructure
+- **12 organized test files** with consistent pytest infrastructure
 - **Centralized mock factories** eliminating duplication
-- **<6 seconds execution** with 100% reliability
+- **~8 seconds execution** with 99.4% reliability
 - **Zero hardware dependencies** - fully mocked
 - **Consistent patterns** across all tests
 
 ### Performance Improvements
-- **10x faster execution** (60s → <6s)
-- **100% reliability** (no hardware-dependent failures)
+- **7.5x faster execution** (60s → ~8s)
+- **99.4% reliability** (no hardware-dependent failures)
 - **CI/CD ready** (runs in any environment)
 - **Memory efficient** (optimized mock usage)
 
@@ -415,8 +457,8 @@ python -m pytest tests/aws/test_aws_connection.py --tb=long
 
 The YMemo test suite has been successfully migrated to a modern pytest-based infrastructure that provides:
 
-✅ **Reliability**: 100% pass rate without hardware dependencies  
-✅ **Performance**: 10x faster execution (<6 seconds)  
+✅ **Reliability**: 99.4% pass rate without hardware dependencies (157/158 tests)
+✅ **Performance**: 7.5x faster execution (~8 seconds for 157 tests)  
 ✅ **Maintainability**: Centralized infrastructure with consistent patterns  
 ✅ **Quality**: Comprehensive coverage of all core functionality  
 ✅ **CI/CD Ready**: Tests run in any environment without setup  

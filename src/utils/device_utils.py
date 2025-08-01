@@ -1,7 +1,7 @@
 """Audio device enumeration utilities."""
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 try:
@@ -241,6 +241,34 @@ def get_audio_devices(refresh: bool = False) -> List[Tuple[str, int]]:
     return device_manager.get_device_choices(refresh)
 
 
+def get_supported_audio_devices(refresh: bool = False) -> List[Tuple[str, int]]:
+    """Get audio device choices filtering out devices with >2 channels.
+    
+    Args:
+        refresh: Force refresh of device list
+        
+    Returns:
+        List of (display_name, device_index) tuples for devices with ≤2 channels
+    """
+    all_devices = device_manager.get_device_choices(refresh)
+    supported_devices = []
+    
+    for display_name, device_index in all_devices:
+        try:
+            device = device_manager.get_device_by_index(device_index)
+            if device and device.max_input_channels <= 2:
+                supported_devices.append((display_name, device_index))
+            elif device:
+                logger.info(f"🚫 Filtering out device '{device.name}' - {device.max_input_channels} channels (only 1-2 channels supported)")
+        except Exception as e:
+            logger.warning(f"⚠️ Error checking device {device_index}: {e}")
+            # Include device if we can't determine channel count (safer to allow)
+            supported_devices.append((display_name, device_index))
+    
+    logger.info(f"📋 Supported devices: {len(supported_devices)}/{len(all_devices)} devices support ≤2 channels")
+    return supported_devices
+
+
 def get_default_device_index() -> int:
     """Get the default input device index.
     
@@ -261,3 +289,137 @@ def test_audio_device(device_index: int) -> bool:
         True if device is working, False otherwise
     """
     return device_manager.test_device(device_index)
+
+
+def get_device_max_channels(device_index: int) -> int:
+    """Get the maximum input channels supported by a device.
+    
+    Args:
+        device_index: Index of device to query
+        
+    Returns:
+        Maximum input channels supported by the device, or 1 if detection fails
+    """
+    try:
+        device = device_manager.get_device_by_index(device_index)
+        if device:
+            max_channels = device.max_input_channels
+            logger.info(f"🔍 Device {device_index} ({device.name}) supports max {max_channels} input channels")
+            return max_channels
+        else:
+            logger.warning(f"⚠️ Device {device_index} not found, defaulting to 1 channel")
+            return 1
+    except Exception as e:
+        logger.error(f"❌ Error getting max channels for device {device_index}: {e}")
+        return 1
+
+
+def get_optimal_channels(device_index: int, requested_channels: int) -> int:
+    """Get the optimal number of channels for a device.
+    
+    Args:
+        device_index: Index of device to use
+        requested_channels: Number of channels requested by configuration
+        
+    Returns:
+        Optimal number of channels to use (min of requested and device max)
+    """
+    try:
+        max_channels = get_device_max_channels(device_index)
+        optimal_channels = min(requested_channels, max_channels)
+        
+        if optimal_channels != requested_channels:
+            logger.info(f"🔧 Channel optimization: Requested {requested_channels}, "
+                       f"device max {max_channels}, using {optimal_channels}")
+        else:
+            logger.debug(f"✅ Channel configuration: Using {optimal_channels} channels as requested")
+        
+        return optimal_channels
+    except Exception as e:
+        logger.error(f"❌ Error optimizing channels for device {device_index}: {e}")
+        logger.info("🔧 Falling back to mono (1 channel)")
+        return 1
+
+
+def validate_device_config(device_index: int, channels: int, sample_rate: int) -> Dict[str, Any]:
+    """Validate and optimize audio configuration for a specific device.
+    
+    Args:
+        device_index: Index of device to validate against
+        channels: Requested number of channels
+        sample_rate: Requested sample rate
+        
+    Returns:
+        Dict containing validated configuration with keys:
+        - channels: Optimized channel count
+        - sample_rate: Validated sample rate
+        - device_info: Device information dict
+        - warnings: List of configuration warnings
+    """
+    warnings = []
+    
+    try:
+        device = device_manager.get_device_by_index(device_index)
+        if not device:
+            warnings.append(f"Device {device_index} not found")
+            return {
+                'channels': 1,
+                'sample_rate': sample_rate,
+                'device_info': {},
+                'warnings': warnings
+            }
+        
+        # Check for >2 channel devices - only mono and stereo supported
+        if device.max_input_channels > 2:
+            error_msg = (f"Device '{device.name}' has {device.max_input_channels} channels. "
+                        f"Only 1-2 channels supported. Please select a different audio device.")
+            warnings.append(error_msg)
+            logger.warning(f"⚠️ Device validation: {error_msg}")
+            # Return error state - this device should not be used
+            return {
+                'channels': 0,  # Invalid channel count to indicate error
+                'sample_rate': sample_rate,
+                'device_info': {
+                    'name': device.name,
+                    'index': device.index,
+                    'max_input_channels': device.max_input_channels,
+                    'error': 'Too many channels'
+                },
+                'warnings': warnings,
+                'error': error_msg
+            }
+        
+        # Optimize channels
+        optimal_channels = get_optimal_channels(device_index, channels)
+        if optimal_channels != channels:
+            warnings.append(f"Channel count reduced from {channels} to {optimal_channels} due to device limitations")
+        
+        # Validate sample rate
+        device_sample_rate = int(device.default_sample_rate)
+        if sample_rate != device_sample_rate:
+            warnings.append(f"Requested sample rate {sample_rate}Hz differs from device default {device_sample_rate}Hz")
+        
+        device_info = {
+            'name': device.name,
+            'index': device.index,
+            'max_input_channels': device.max_input_channels,
+            'default_sample_rate': device.default_sample_rate,
+            'is_default': device.is_default_input
+        }
+        
+        return {
+            'channels': optimal_channels,
+            'sample_rate': sample_rate,
+            'device_info': device_info,
+            'warnings': warnings
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error validating device config for {device_index}: {e}")
+        warnings.append(f"Device validation failed: {e}")
+        return {
+            'channels': 1,
+            'sample_rate': sample_rate,
+            'device_info': {},
+            'warnings': warnings
+        }

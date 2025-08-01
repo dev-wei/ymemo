@@ -33,17 +33,18 @@ source .venv/bin/activate && python main.py
 **IMPORTANT: Test suite has been fully migrated to pytest-based infrastructure (2024)**
 
 ```bash
-# Run all migrated tests (95 tests, <6 seconds, hardware-free)
-source .venv/bin/activate && python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py -v
+# Run all migrated tests (157 tests, ~8 seconds, hardware-free)
+source .venv/bin/activate && python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ -v
 
 # Run by test category
-source .venv/bin/activate && python -m pytest tests/providers/ -v      # Provider tests (47 tests)
+source .venv/bin/activate && python -m pytest tests/providers/ -v      # Provider tests (64 tests)
 source .venv/bin/activate && python -m pytest tests/aws/ -v           # AWS integration (9 tests)  
-source .venv/bin/activate && python -m pytest tests/audio/ -v         # Audio/device tests (10 tests)
+source .venv/bin/activate && python -m pytest tests/audio/ -v         # Audio/device tests (39 tests)
 source .venv/bin/activate && python -m pytest tests/unit/ -v          # Core unit tests (29 tests)
+source .venv/bin/activate && python -m pytest tests/config/ -v        # Configuration tests (16 tests)
 
 # Run with coverage
-source .venv/bin/activate && python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py --cov=src --cov-report=html
+source .venv/bin/activate && python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ --cov=src --cov-report=html
 
 # Legacy test commands (deprecated, use above instead)
 source .venv/bin/activate && python tests/test_core_functionality.py
@@ -112,6 +113,7 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 
 *Provider Selection:*
 - `TRANSCRIPTION_PROVIDER` - Choose transcription provider ('aws', 'azure', 'whisper', 'google', default: 'aws')
+  - `aws` provider now intelligently switches between single and dual connections automatically
 - `CAPTURE_PROVIDER` - Choose audio capture provider ('pyaudio', 'file', default: 'pyaudio')
 
 *Audio Settings:*
@@ -125,6 +127,11 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 - `AWS_LANGUAGE_CODE` - Language code (default: 'en-US')
 - `AWS_MAX_SPEAKERS` - Maximum speakers for diarization (default: 10)
 - `ENABLE_SPEAKER_DIARIZATION` - Enable speaker identification (true/false)
+
+*AWS Connection Strategy:*
+- `AWS_CONNECTION_STRATEGY` - Connection mode ('auto', 'single', 'dual', default: 'auto')
+- `AWS_DUAL_FALLBACK_ENABLED` - Enable fallback to dual connections (true/false, default: true)  
+- `AWS_CHANNEL_BALANCE_THRESHOLD` - Channel imbalance threshold for fallback (0.0-1.0, default: 0.3)
 
 *Performance Settings:*
 - `MAX_LATENCY_MS` - Maximum latency in milliseconds (default: 300)
@@ -157,7 +164,7 @@ print_config_summary()  # Shows current configuration
 ## Testing Strategy
 
 **MIGRATED PYTEST INFRASTRUCTURE (2024):**
-- **95 tests** across 7 core files, **100% pass rate**, **<6 seconds execution**
+- **157 tests** across 12 core files, **99.4% pass rate** (1 skipped), **~8 seconds execution**
 - **Zero hardware dependencies** - all tests run without PyAudio/AWS/device access
 - **Centralized infrastructure** with base classes, fixtures, and mock factories
 - **CI/CD ready** - tests run consistently in any environment
@@ -165,17 +172,23 @@ print_config_summary()  # Shows current configuration
 **Test Architecture:**
 ```
 tests/
-├── providers/     (47 tests) - Provider functionality tests
+├── providers/     (64 tests) - Provider functionality tests
 │   ├── test_provider_factory.py      # Factory pattern & registration (19 tests)
 │   ├── test_provider_lifecycle.py    # Lifecycle management (17 tests)
-│   └── test_provider_error_handling.py # Error handling patterns (11 tests)
+│   ├── test_provider_error_handling.py # Error handling patterns (11 tests)
+│   ├── test_azure_provider.py        # Azure Speech Service integration (17 tests)
+│   └── test_dual_provider_system.py  # Dual AWS Transcribe architecture (17 tests)
 ├── aws/          (9 tests)  - AWS integration tests  
 │   └── test_aws_connection.py        # AWS connection & streaming mocking (9 tests)
-├── audio/        (10 tests) - Audio device tests
-│   └── test_device_selection.py      # Device selection & validation (10 tests)
+├── audio/        (39 tests) - Audio device tests
+│   ├── test_device_selection.py      # Device selection & validation (10 tests)
+│   └── test_device_capability.py     # Device capability testing (29 tests)
 ├── unit/         (29 tests) - Core unit tests
 │   ├── test_enhanced_session_manager.py  # Enhanced session management (17 tests)
 │   └── test_session_manager_stop.py      # Stop functionality (12 tests)
+├── config/       (16 tests) - Configuration system tests
+│   ├── test_audio_config_validation.py   # Configuration validation (8 tests)
+│   └── test_configuration_parsing.py     # Environment parsing (8 tests)
 ├── base/         - Test infrastructure (BaseTest, BaseIntegrationTest, BaseAsyncTest)
 ├── fixtures/     - Mock factories, AWS mocks, async utilities
 └── conftest.py   - Central pytest configuration with fixtures
@@ -197,6 +210,14 @@ tests/
 - `MockProviderFactory` - Provider mocks with proper interface compliance
 - `MockSessionManagerFactory` - Session manager mocks with state management
 - AWS mocking patterns for transcription without actual service calls
+
+**Recent Test Infrastructure Improvements (2024):**
+- **Workspace Migration**: Successfully migrated 7 root directory test files to organized pytest structure
+- **Azure Provider Testing**: Complete Azure Speech Service provider test coverage with comprehensive mocking
+- **Dual Provider System**: Full test coverage for AWS dual-channel architecture with channel splitting
+- **Configuration Validation**: Robust testing of environment variable parsing and configuration validation
+- **Device Selection**: Enhanced device selection testing with unicode support and edge case handling
+- **Async Testing**: Proper async test infrastructure with event loop management and resource cleanup
 
 **Legacy Test Files (Deprecated):**
 - Use migrated pytest versions instead of legacy unittest files

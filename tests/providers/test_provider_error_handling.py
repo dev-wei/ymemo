@@ -158,6 +158,7 @@ class TestProviderErrorHandling(BaseTest):
             async def send_audio(self, audio_chunk): pass
             async def get_transcription(self): yield None
             async def stop_stream(self): pass
+            def get_required_channels(self) -> int: return 1
         
         class ValidCaptureProvider(AudioCaptureProvider):
             async def start_capture(self, audio_config, device_id=None): pass
@@ -217,6 +218,7 @@ class TestProviderErrorRecovery(BaseIntegrationTest):
             async def send_audio(self, audio_chunk): pass
             async def get_transcription(self): yield None
             async def stop_stream(self): pass
+            def get_required_channels(self) -> int: return 1
         
         factory.register_transcription_provider('working', WorkingProvider)
         
