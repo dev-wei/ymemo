@@ -244,7 +244,7 @@ class AudioSessionManager:
             logger.debug(f"🔄 SessionManager: Starting async audio processing for device {device_index}")
             if self.audio_processor:
                 # Run the audio processor - it will handle its own stopping
-                loop.run_until_complete(self.audio_processor.start_recording(device_index))
+                loop.run_until_complete(self.audio_processor.start_recording(device_id=device_index))
             else:
                 logger.error("❌ SessionManager: No audio processor available")
         except asyncio.CancelledError:

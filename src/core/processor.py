@@ -531,6 +531,11 @@ class AudioProcessor:
             callback: Function to call with (is_healthy, message) when connection status changes
         """
         self.connection_health_callback = callback
+        
+        # If transcription provider exists and supports health callbacks, set it immediately
+        if hasattr(self.transcription_provider, 'set_connection_health_callback') and self.transcription_provider:
+            self.transcription_provider.set_connection_health_callback(callback)
+            logger.debug("🔍 AudioProcessor: Connection health callback set on transcription provider")
     
     def get_available_devices(self) -> Dict[int, str]:
         """Get list of available audio input devices using existing provider."""

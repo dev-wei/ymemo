@@ -29,14 +29,23 @@ source .venv/bin/activate && python main.py
 ```
 
 ### Running Tests
+
+**IMPORTANT: Test suite has been fully migrated to pytest-based infrastructure (2024)**
+
 ```bash
-# Run all tests
-source .venv/bin/activate && python -m pytest tests/
+# Run all migrated tests (95 tests, <6 seconds, hardware-free)
+source .venv/bin/activate && python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py -v
 
-# Run specific test
-source .venv/bin/activate && python tests/test_file_audio_capture.py
+# Run by test category
+source .venv/bin/activate && python -m pytest tests/providers/ -v      # Provider tests (47 tests)
+source .venv/bin/activate && python -m pytest tests/aws/ -v           # AWS integration (9 tests)  
+source .venv/bin/activate && python -m pytest tests/audio/ -v         # Audio/device tests (10 tests)
+source .venv/bin/activate && python -m pytest tests/unit/ -v          # Core unit tests (29 tests)
 
-# Run core functionality test (no AWS dependency)
+# Run with coverage
+source .venv/bin/activate && python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py --cov=src --cov-report=html
+
+# Legacy test commands (deprecated, use above instead)
 source .venv/bin/activate && python tests/test_core_functionality.py
 ```
 
@@ -147,34 +156,53 @@ print_config_summary()  # Shows current configuration
 
 ## Testing Strategy
 
-**File-Based Testing:**
-- Use `FileAudioCaptureProvider` with pre-recorded audio files
-- Avoids AWS timeout issues in automated testing
-- Test audio file created via `tests/create_test_audio.py`
+**MIGRATED PYTEST INFRASTRUCTURE (2024):**
+- **95 tests** across 7 core files, **100% pass rate**, **<6 seconds execution**
+- **Zero hardware dependencies** - all tests run without PyAudio/AWS/device access
+- **Centralized infrastructure** with base classes, fixtures, and mock factories
+- **CI/CD ready** - tests run consistently in any environment
 
-**Core Functionality Testing:**
-- `test_core_functionality.py` - Tests session management without AWS dependency
-- `test_file_audio_capture.py` - Tests file-based audio capture directly
-- Avoid tests that require live microphone input or AWS streaming
-- Always use .venv to run any python code or tests. Always try to use existing test as much as possible, to enrich them to cover more edge cases, rather than always creating new test cases
-- Always follow these rules in building test cases: Tests should NOT be included in the automated test suite if they require:
-  1. A working audio device
-  2. AWS credentials
-  3. Network connectivity to AWS Transcribe
+**Test Architecture:**
+```
+tests/
+├── providers/     (47 tests) - Provider functionality tests
+│   ├── test_provider_factory.py      # Factory pattern & registration (19 tests)
+│   ├── test_provider_lifecycle.py    # Lifecycle management (17 tests)
+│   └── test_provider_error_handling.py # Error handling patterns (11 tests)
+├── aws/          (9 tests)  - AWS integration tests  
+│   └── test_aws_connection.py        # AWS connection & streaming mocking (9 tests)
+├── audio/        (10 tests) - Audio device tests
+│   └── test_device_selection.py      # Device selection & validation (10 tests)
+├── unit/         (29 tests) - Core unit tests
+│   ├── test_enhanced_session_manager.py  # Enhanced session management (17 tests)
+│   └── test_session_manager_stop.py      # Stop functionality (12 tests)
+├── base/         - Test infrastructure (BaseTest, BaseIntegrationTest, BaseAsyncTest)
+├── fixtures/     - Mock factories, AWS mocks, async utilities
+└── conftest.py   - Central pytest configuration with fixtures
+```
 
-**Stop Recording Testing:**
-- `test_session_manager_stop.py` - Comprehensive session manager stop functionality tests
-- `test_stop_recording_comprehensive.py` - Full stop recording test suite
-- `test_audio_processor_stop_integration.py` - Integration tests with real audio processor
-- `test_all_stop_recording.py` - Master test runner for all stop recording tests
+**Key Test Principles:**
+- **Hardware Independence**: All PyAudio calls mocked, no AWS credentials needed, no device access
+- **Consistent Patterns**: All tests inherit from base classes with standard fixtures
+- **Comprehensive Mocking**: Centralized mock factories for AudioProcessor, Providers, AWS services
+- **Performance Focus**: Fast execution through effective mocking and parallel-safe design
 
-**Test Coverage:**
-- Session manager stop functionality (mocked and real)
-- Audio processor stop sequence validation
-- Thread safety and concurrency testing
-- Error handling and timeout scenarios
-- Resource cleanup verification
-- State transition validation
+**Base Test Classes:**
+- `BaseTest` - Unit tests with singleton cleanup and mock factory access
+- `BaseIntegrationTest` - Integration tests with extended timeout handling  
+- `BaseAsyncTest` - Async tests with proper event loop management
+
+**Mock Strategy:**
+- `MockAudioProcessorFactory` - Standardized AudioProcessor mocks
+- `MockProviderFactory` - Provider mocks with proper interface compliance
+- `MockSessionManagerFactory` - Session manager mocks with state management
+- AWS mocking patterns for transcription without actual service calls
+
+**Legacy Test Files (Deprecated):**
+- Use migrated pytest versions instead of legacy unittest files
+- `test_core_functionality.py` - Use `tests/unit/` instead
+- `test_file_audio_capture.py` - Use `tests/audio/test_device_selection.py` instead
+- Always follow these rules: Tests should NOT require hardware devices, AWS credentials, or network connectivity
 
 ## File Structure
 
