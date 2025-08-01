@@ -1,0 +1,247 @@
+name: Code Quality
+
+# Run on all PRs and pushes to main for comprehensive quality checks
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Concurrency group to cancel previous runs
+concurrency:
+  group: code-quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+# Environment variables
+env:
+  FORCE_COLOR: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  # Linting and code style checks
+  lint:
+    name: "Lint & Style"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "🐍 Set up Python 3.12"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "📦 Cache pip dependencies"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: lint-pip-3.12-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: lint-pip-3.12-
+
+      - name: "📦 Install linting tools"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff black isort mypy bandit safety
+          # Install project dependencies for type checking
+          python -m pip install -r requirements.txt
+
+      - name: "🔍 Run Ruff (fast Python linter)"
+        run: |
+          # Ruff for fast linting and formatting checks
+          ruff check src/ tests/ --output-format=github
+          ruff format --check src/ tests/
+
+      - name: "🎨 Check Black formatting"
+        run: black --check --diff src/ tests/
+
+      - name: "📦 Check import sorting (isort)"
+        run: isort --check-only --diff src/ tests/
+
+      - name: "🔍 Type checking with mypy"
+        run: |
+          # Run mypy on source code only (tests often have complex mocking)
+          mypy src/ --ignore-missing-imports --no-strict-optional
+        continue-on-error: true  # Don't fail build on type issues initially
+
+  # Security scanning
+  security:
+    name: "Security Scan"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "🐍 Set up Python 3.12"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "📦 Install security tools"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install bandit safety semgrep
+          python -m pip install -r requirements.txt
+
+      - name: "🔒 Run Bandit security linter"
+        run: |
+          # Bandit for security issue detection
+          bandit -r src/ -f json -o bandit-report.json || true
+          bandit -r src/ -f txt
+
+      - name: "🛡️ Check dependencies for security vulnerabilities"
+        run: |
+          # Safety for known security vulnerabilities in dependencies
+          safety check --json --output safety-report.json || true
+          safety check
+
+      - name: "🔍 Run Semgrep security analysis"
+        run: |
+          # Semgrep for advanced security pattern detection
+          semgrep --config=auto src/ --json --output=semgrep-report.json || true
+          semgrep --config=auto src/
+
+      - name: "📤 Upload security reports"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+            semgrep-report.json
+          retention-days: 30
+
+  # Documentation checks
+  docs:
+    name: "Documentation"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "🐍 Set up Python 3.12"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "📦 Install documentation tools"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pydocstyle doc8 sphinx
+
+      - name: "📚 Check docstring style"
+        run: |
+          # Check docstring conventions (relaxed for initial implementation)
+          pydocstyle src/ --convention=numpy --add-ignore=D100,D101,D102,D103,D104,D105 || true
+
+      - name: "📝 Check README and documentation"
+        run: |
+          # Basic checks for markdown files
+          if command -v markdownlint-cli2 &> /dev/null; then
+            markdownlint-cli2 "**/*.md"
+          else
+            echo "markdownlint not installed, skipping markdown linting"
+          fi
+
+  # Dependency analysis
+  dependencies:
+    name: "Dependency Analysis"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "🐍 Set up Python 3.12"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "📦 Install dependency analysis tools"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit pipdeptree
+
+      - name: "🔍 Audit dependencies for vulnerabilities"
+        run: |
+          # pip-audit for dependency vulnerability scanning
+          pip-audit --desc --output=audit-report.json --format=json || true
+          pip-audit --desc
+
+      - name: "🌳 Generate dependency tree"
+        run: |
+          # Install project dependencies first
+          python -m pip install -r requirements.txt
+          # Generate dependency tree for analysis
+          pipdeptree --json > dependency-tree.json
+          pipdeptree
+
+      - name: "📤 Upload dependency reports"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-reports
+          path: |
+            audit-report.json
+            dependency-tree.json
+          retention-days: 30
+
+  # Quality gate for all code quality checks
+  quality-summary:
+    name: "Quality Summary ✅"
+    needs: [lint, security, docs, dependencies]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: "✅ Quality checks passed"
+        if: |
+          needs.lint.result == 'success' &&
+          needs.security.result == 'success' &&
+          needs.docs.result == 'success' &&
+          needs.dependencies.result == 'success'
+        run: |
+          echo "🎉 All code quality checks passed!"
+          echo "📊 Quality Summary:"
+          echo "- ✅ Linting and style checks"
+          echo "- ✅ Security vulnerability scanning"
+          echo "- ✅ Documentation checks"
+          echo "- ✅ Dependency analysis"
+          echo ""
+          echo "YMemo maintains high code quality standards! 🚀"
+
+      - name: "❌ Quality checks failed"
+        if: |
+          needs.lint.result == 'failure' ||
+          needs.security.result == 'failure' ||
+          needs.docs.result == 'failure' ||
+          needs.dependencies.result == 'failure'
+        run: |
+          echo "❌ Some quality checks failed:"
+          echo "- Lint: ${{ needs.lint.result }}"
+          echo "- Security: ${{ needs.security.result }}"
+          echo "- Docs: ${{ needs.docs.result }}"
+          echo "- Dependencies: ${{ needs.dependencies.result }}"
+          echo ""
+          echo "Please review the detailed reports above."
+          exit 1
+
+      - name: "⚠️ Quality checks incomplete"
+        if: |
+          contains(fromJSON('["cancelled", "skipped"]'), needs.lint.result) ||
+          contains(fromJSON('["cancelled", "skipped"]'), needs.security.result) ||
+          contains(fromJSON('["cancelled", "skipped"]'), needs.docs.result) ||
+          contains(fromJSON('["cancelled", "skipped"]'), needs.dependencies.result)
+        run: |
+          echo "⚠️ Some quality checks were cancelled or skipped."
+          echo "This may indicate workflow issues or concurrency limits."
+          exit 1

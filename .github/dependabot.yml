@@ -1,0 +1,156 @@
+# Dependabot configuration for automated dependency updates
+# Documentation: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # Python dependencies (pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    
+    # Keep PRs focused and manageable
+    open-pull-requests-limit: 5
+    
+    # Grouping strategy for related updates
+    groups:
+      # Group AWS-related dependencies
+      aws-dependencies:
+        patterns:
+          - "boto3*"
+          - "botocore*"
+          - "amazon-transcribe*"
+          - "awscli*"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Group Azure dependencies
+      azure-dependencies:
+        patterns:
+          - "azure-*"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Group audio processing dependencies
+      audio-dependencies:
+        patterns:
+          - "pyaudio*"
+          - "numpy*"
+          - "scipy*"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Group testing dependencies
+      testing-dependencies:
+        patterns:
+          - "pytest*"
+          - "coverage*"
+          - "mock*"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Group UI dependencies
+      ui-dependencies:
+        patterns:
+          - "gradio*"
+          - "fastapi*"
+          - "uvicorn*"
+        update-types:
+          - "minor"
+          - "patch"
+    
+    # Allow specific dependency updates
+    allow:
+      - dependency-type: "direct"  # Only direct dependencies
+      - dependency-type: "indirect"  # Also indirect for security updates
+        update-type: "security-update"
+    
+    # Ignore specific problematic updates if needed
+    ignore:
+      # Example: ignore major version updates for stable dependencies
+      # - dependency-name: "gradio"
+      #   update-types: ["version-update:semver-major"]
+      
+      # Ignore development dependencies major updates to maintain stability
+      - dependency-name: "pytest"
+        update-types: ["version-update:semver-major"]
+    
+    # Commit message configuration
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    
+    # Pull request configuration
+    pull-request-branch-name:
+      separator: "/"
+    
+    # Reviewers and assignees (customize based on your team)
+    reviewers:
+      - "dev-wei"  # Replace with actual GitHub username
+    
+    # Labels for easy identification and automation
+    labels:
+      - "dependencies"
+      - "automated"
+      - "python"
+    
+    # Target branch for PRs
+    target-branch: "main"
+    
+    # Auto-merge configuration for patch updates (optional, be careful!)
+    # enable-beta-ecosystems: true
+
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "UTC"
+    
+    open-pull-requests-limit: 3
+    
+    # Group GitHub Actions updates
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci/cd"
+    
+    target-branch: "main"
+
+  # Docker dependencies (if you add Dockerfile in the future)
+  # - package-ecosystem: "docker"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "wednesday"
+  #     time: "09:00"
+  #     timezone: "UTC"
+  #   
+  #   open-pull-requests-limit: 2
+  #   
+  #   labels:
+  #     - "dependencies"
+  #     - "docker"
