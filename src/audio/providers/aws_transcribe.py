@@ -444,10 +444,14 @@ class AWSTranscribeProvider(TranscriptionProvider):
                 logger.info(f"🎵 AWS Transcribe: Raw audio saving enabled")
         
         # Validate AWS configuration early (skip in test environment)
-        # Skip validation if we're in a test environment (pytest sets this)
+        # Use environment-first approach for maximum CI compatibility
         skip_aws_validation = (
-            os.environ.get('PYTEST_CURRENT_TEST') is not None or 
-            os.environ.get('CI') is not None or
+            os.environ.get('SKIP_AWS_VALIDATION', '').lower() == 'true' or
+            os.environ.get('MOCK_SERVICES', '').lower() == 'true' or
+            os.environ.get('CI') is not None or 
+            os.environ.get('TESTING', '').lower() == 'true' or
+            os.environ.get('PYTEST_RUNNING', '').lower() == 'true' or
+            os.environ.get('PYTEST_CURRENT_TEST') is not None or
             kwargs.get('skip_validation', False)
         )
         

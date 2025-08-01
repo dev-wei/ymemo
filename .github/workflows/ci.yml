@@ -23,6 +23,28 @@ concurrency:
 env:
   FORCE_COLOR: "1"  # Make tools pretty
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  
+  # Test environment indicators
+  CI: "true"
+  TESTING: "true" 
+  PYTEST_RUNNING: "true"
+  
+  # Mock AWS credentials (required for boto3 initialization)
+  AWS_ACCESS_KEY_ID: "test-access-key-id"
+  AWS_SECRET_ACCESS_KEY: "test-secret-access-key"
+  AWS_DEFAULT_REGION: "us-east-1"
+  AWS_REGION: "us-east-1"
+  
+  # YMemo-specific test configuration
+  TRANSCRIPTION_PROVIDER: "aws"
+  CAPTURE_PROVIDER: "file"
+  AUDIO_SAMPLE_RATE: "16000"
+  AUDIO_CHANNELS: "1"
+  LOG_LEVEL: "WARNING"  # Reduce CI log noise
+  
+  # Disable real service connections
+  SKIP_AWS_VALIDATION: "true"
+  MOCK_SERVICES: "true"
 
 # Global permissions
 permissions:
@@ -119,6 +141,25 @@ jobs:
           # Windows-specific dependencies if needed
           # Most dependencies are handled by pip on Windows
           Write-Output "Windows system dependencies installed"
+
+      - name: "🧪 Set up test environment"
+        run: |
+          # Create fake AWS credentials directory for boto3
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOF
+          [default]
+          aws_access_key_id = test-access-key-id
+          aws_secret_access_key = test-secret-access-key
+          region = us-east-1
+          EOF
+          
+          cat > ~/.aws/config << EOF
+          [default]
+          region = us-east-1
+          output = json
+          EOF
+          
+          echo "✅ Test environment configured with mock AWS credentials"
 
       - name: "📦 Install Python dependencies"
         run: |
