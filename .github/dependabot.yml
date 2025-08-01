@@ -25,17 +25,11 @@ updates:
           - "botocore*"
           - "amazon-transcribe*"
           - "awscli*"
-        update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
       
       # Group Azure dependencies
       azure-dependencies:
         patterns:
           - "azure-*"
-        update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
       
       # Group audio processing dependencies
       audio-dependencies:
@@ -43,9 +37,6 @@ updates:
           - "pyaudio*"
           - "numpy*"
           - "scipy*"
-        update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
       
       # Group testing dependencies
       testing-dependencies:
@@ -53,9 +44,6 @@ updates:
           - "pytest*"
           - "coverage*"
           - "mock*"
-        update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
       
       # Group UI dependencies
       ui-dependencies:
@@ -63,9 +51,6 @@ updates:
           - "gradio*"
           - "fastapi*"
           - "uvicorn*"
-        update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
     
     # Allow specific dependency updates
     allow:
@@ -125,9 +110,6 @@ updates:
       github-actions:
         patterns:
           - "*"
-        update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
     
     commit-message:
       prefix: "ci"
