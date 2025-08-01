@@ -11,7 +11,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     
     # Keep PRs focused and manageable
     open-pull-requests-limit: 5
@@ -26,16 +26,16 @@ updates:
           - "amazon-transcribe*"
           - "awscli*"
         update-types:
-          - "minor"
-          - "patch"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       
       # Group Azure dependencies
       azure-dependencies:
         patterns:
           - "azure-*"
         update-types:
-          - "minor"
-          - "patch"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       
       # Group audio processing dependencies
       audio-dependencies:
@@ -44,8 +44,8 @@ updates:
           - "numpy*"
           - "scipy*"
         update-types:
-          - "minor"
-          - "patch"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       
       # Group testing dependencies
       testing-dependencies:
@@ -54,8 +54,8 @@ updates:
           - "coverage*"
           - "mock*"
         update-types:
-          - "minor"
-          - "patch"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       
       # Group UI dependencies
       ui-dependencies:
@@ -64,8 +64,8 @@ updates:
           - "fastapi*"
           - "uvicorn*"
         update-types:
-          - "minor"
-          - "patch"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     
     # Allow specific dependency updates
     allow:
@@ -116,7 +116,7 @@ updates:
       interval: "weekly"
       day: "tuesday"
       time: "09:00"
-      timezone: "UTC"
+      timezone: "Etc/UTC"
     
     open-pull-requests-limit: 3
     
@@ -126,8 +126,8 @@ updates:
         patterns:
           - "*"
         update-types:
-          - "minor"
-          - "patch"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     
     commit-message:
       prefix: "ci"

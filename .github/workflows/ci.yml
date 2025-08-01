@@ -102,9 +102,9 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -yq
-          sudo apt-get install -yq portaudio19-dev python3-dev
-          # Install other audio dependencies if needed
-          # These are typically mocked in tests, but good to have for completeness
+          sudo apt-get install -yq portaudio19-dev python3-dev libasound2-dev
+          # Install additional audio system dependencies
+          sudo apt-get install -yq libportaudio2 libportaudiocpp0
 
       - name: "🔧 Install system dependencies (macOS)"
         if: runner.os == 'macOS'
