@@ -31,7 +31,7 @@ env:
   
   # YMemo-specific test configuration
   TRANSCRIPTION_PROVIDER: "aws"
-  CAPTURE_PROVIDER: "file"
+  CAPTURE_PROVIDER: "pyaudio"
   LOG_LEVEL: "WARNING"  # Reduce CI log noise
   
   # Disable real service connections
@@ -73,7 +73,7 @@ jobs:
 
       - name: "🧪 Set up test environment"
         run: |
-          # Create fake AWS credentials directory for boto3
+          # Create fake AWS credentials directory for boto3 (Linux/macOS only)
           mkdir -p ~/.aws
           cat > ~/.aws/credentials << EOF
           [default]
@@ -137,7 +137,7 @@ jobs:
 
       - name: "🧪 Set up test environment"
         run: |
-          # Create fake AWS credentials directory for boto3
+          # Create fake AWS credentials directory for boto3 (Linux/macOS only)
           mkdir -p ~/.aws
           cat > ~/.aws/credentials << EOF
           [default]
@@ -244,7 +244,7 @@ jobs:
 
       - name: "🧪 Set up test environment"
         run: |
-          # Create fake AWS credentials directory for boto3
+          # Create fake AWS credentials directory for boto3 (Linux/macOS only)
           mkdir -p ~/.aws
           cat > ~/.aws/credentials << EOF
           [default]

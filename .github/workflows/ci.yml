@@ -37,7 +37,7 @@ env:
   
   # YMemo-specific test configuration
   TRANSCRIPTION_PROVIDER: "aws"
-  CAPTURE_PROVIDER: "file"
+  CAPTURE_PROVIDER: "pyaudio"
   AUDIO_SAMPLE_RATE: "16000"
   AUDIO_CHANNELS: "1"
   LOG_LEVEL: "WARNING"  # Reduce CI log noise
@@ -142,7 +142,8 @@ jobs:
           # Most dependencies are handled by pip on Windows
           Write-Output "Windows system dependencies installed"
 
-      - name: "🧪 Set up test environment"
+      - name: "🧪 Set up test environment (Unix)"
+        if: runner.os != 'Windows'
         run: |
           # Create fake AWS credentials directory for boto3
           mkdir -p ~/.aws
@@ -160,6 +161,61 @@ jobs:
           EOF
           
           echo "✅ Test environment configured with mock AWS credentials"
+
+      - name: "🧪 Set up test environment (Windows)"
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          # Create fake AWS credentials directory for boto3
+          New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.aws"
+          
+          @"
+          [default]
+          aws_access_key_id = test-access-key-id
+          aws_secret_access_key = test-secret-access-key
+          region = us-east-1
+          "@ | Out-File -FilePath "$env:USERPROFILE\.aws\credentials" -Encoding UTF8
+          
+          @"
+          [default]
+          region = us-east-1
+          output = json
+          "@ | Out-File -FilePath "$env:USERPROFILE\.aws\config" -Encoding UTF8
+          
+          Write-Output "✅ Test environment configured with mock AWS credentials"
+
+      - name: "🎵 Ensure test audio file exists"
+        run: |
+          python -c "
+import os
+import numpy as np
+import wave
+import sys
+
+audio_file = 'tests/test_audio.wav'
+if not os.path.exists(audio_file):
+    print('Creating test audio file...')
+    # Ensure tests directory exists
+    os.makedirs('tests', exist_ok=True)
+    
+    # Generate simple test audio (440 Hz tone)
+    sample_rate = 16000
+    duration = 2.0
+    frequency = 440.0
+    t = np.linspace(0, duration, int(sample_rate * duration), False)
+    wave_data = np.sin(frequency * 2 * np.pi * t)
+    wave_data = (wave_data * 32767).astype(np.int16)
+    
+    with wave.open(audio_file, 'w') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2) 
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(wave_data.tobytes())
+    
+    print('✅ Test audio file created: tests/test_audio.wav')
+else:
+    print('✅ Test audio file already exists')
+"
 
       - name: "📦 Install Python dependencies"
         run: |

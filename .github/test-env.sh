@@ -24,7 +24,7 @@ export AWS_REGION=us-east-1
 
 # YMemo-specific test configuration  
 export TRANSCRIPTION_PROVIDER=aws
-export CAPTURE_PROVIDER=file
+export CAPTURE_PROVIDER=pyaudio
 export AUDIO_SAMPLE_RATE=16000
 export AUDIO_CHANNELS=1
 
