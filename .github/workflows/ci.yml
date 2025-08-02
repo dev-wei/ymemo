@@ -171,30 +171,47 @@ jobs:
             --tb=short \
             --durations=10
 
-          # Verify coverage files were created with detailed debugging
+          # Enhanced coverage files verification with detailed debugging
           echo "📊 Coverage files verification:"
           echo "Working directory: $(pwd)"
+          echo "Python version: $(python --version)"
+          echo "Coverage version: $(python -m coverage --version)"
+          echo ""
+
+          echo "Configuration check:"
+          echo "Current coverage config:"
+          python -c "import coverage; c = coverage.Coverage(); print(f'Data file: {c.config.data_file}'); print(f'Source: {c.config.source}')" 2>/dev/null || echo "Coverage config inspection failed"
+          echo ""
+
           echo "All files in current directory:"
           ls -la
           echo ""
           echo "Coverage-related files:"
           find . -name "*coverage*" -o -name ".coverage*" -type f | sort
           echo ""
+
           echo "Coverage database file check:"
           if [ -f ".coverage" ]; then
             echo "✅ .coverage database file found ($(stat -c%s .coverage 2>/dev/null || stat -f%z .coverage) bytes)"
             file .coverage
+            python -c "import sqlite3; db = sqlite3.connect('.coverage'); print(f'Tables: {[r[0] for r in db.execute(\"SELECT name FROM sqlite_master WHERE type=\\'table\\'\").fetchall()]}')" 2>/dev/null || echo "Cannot read .coverage database structure"
           else
             echo "❌ .coverage database file NOT found"
+            echo "Searching for any coverage files:"
+            find . -name "*.coverage*" -type f 2>/dev/null || echo "No coverage files found anywhere"
           fi
           echo ""
+
           echo "Coverage XML file check:"
           if [ -f "coverage.xml" ]; then
             echo "✅ coverage.xml found ($(stat -c%s coverage.xml 2>/dev/null || stat -f%z coverage.xml) bytes)"
+            echo "XML file header:"
+            head -n 5 coverage.xml
           else
             echo "❌ coverage.xml NOT found"
           fi
           echo ""
+
           echo "Coverage directories:"
           ls -la htmlcov/ coverage_reports/ 2>/dev/null || echo "Some coverage directories missing"
 
