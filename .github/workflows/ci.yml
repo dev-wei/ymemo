@@ -119,16 +119,8 @@ jobs:
           # Install portaudio and other dependencies
           brew install portaudio
 
-      - name: "🔧 Install system dependencies (Windows)"
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          # Windows-specific dependencies if needed
-          # Most dependencies are handled by pip on Windows
-          Write-Output "Windows system dependencies installed"
 
-      - name: "🧪 Set up test environment (Unix)"
-        if: runner.os != 'Windows'
+      - name: "🧪 Set up test environment"
         run: |
           # Create fake AWS credentials directory for boto3
           mkdir -p ~/.aws
@@ -147,27 +139,6 @@ jobs:
 
           echo "✅ Test environment configured with mock AWS credentials"
 
-      - name: "🧪 Set up test environment (Windows)"
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          # Create fake AWS credentials directory for boto3
-          New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.aws"
-
-          @"
-          [default]
-          aws_access_key_id = test-access-key-id
-          aws_secret_access_key = test-secret-access-key
-          region = us-east-1
-          "@ | Out-File -FilePath "$env:USERPROFILE\.aws\credentials" -Encoding UTF8
-
-          @"
-          [default]
-          region = us-east-1
-          output = json
-          "@ | Out-File -FilePath "$env:USERPROFILE\.aws\config" -Encoding UTF8
-
-          Write-Output "✅ Test environment configured with mock AWS credentials"
 
       - name: "📦 Install Python dependencies"
         run: |
