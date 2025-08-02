@@ -170,6 +170,10 @@ jobs:
             --tb=short \
             --durations=10
 
+          # Verify coverage files were created
+          echo "📊 Coverage files generated:"
+          ls -la .coverage* coverage.xml htmlcov/ 2>/dev/null || echo "Some coverage files missing"
+
       - name: "🧪 Run essential tests (cross-platform)"
         if: matrix.test-type == 'essential'
         run: |
@@ -307,17 +311,14 @@ jobs:
         run: |
           # Check if coverage data files exist
           echo "📋 Checking for coverage files..."
-          ls -la .coverage* coverage.xml || echo "Coverage files not found"
-
-          # Verify coverage data
-          echo "📊 Coverage data info:"
-          python -m coverage report --show-missing || echo "Unable to read coverage data"
+          ls -la .coverage* coverage.xml htmlcov/ 2>/dev/null || echo "Coverage files not found"
 
           # Generate coverage report and add to step summary
-          python -m coverage report --format=markdown >> $GITHUB_STEP_SUMMARY || echo "Failed to generate markdown report"
+          echo "📊 Generating coverage report..."
+          python -m coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
 
-          # Generate detailed HTML report
-          python -m coverage html --skip-covered --skip-empty || echo "Failed to generate HTML report"
+          # Generate detailed HTML report (already exists from pytest, but ensure it's current)
+          python -m coverage html --skip-covered --skip-empty
 
           # Check coverage threshold (relaxed for development)
           python -m coverage report --fail-under=25
