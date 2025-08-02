@@ -151,7 +151,7 @@ jobs:
       - name: "🧪 Run full test suite"
         if: matrix.test-type == 'full'
         run: |
-          # Run complete YMemo test suite (157 tests, ~8 seconds)
+          # Run complete YMemo test suite (261 tests, ~8 seconds)
           python -m pytest \
             tests/providers/ \
             tests/aws/ \
@@ -282,11 +282,41 @@ jobs:
           key: ubuntu-pip-3.11-${{ hashFiles('**/requirements.txt') }}
           restore-keys: ubuntu-pip-3.11-
 
+      # Install system dependencies (required for PyAudio compilation)
+      - name: "🔧 Install system dependencies"
+        run: |
+          sudo apt-get update -yq
+          sudo apt-get install -yq portaudio19-dev python3-dev libasound2-dev
+          # Install additional audio system dependencies
+          sudo apt-get install -yq libportaudio2 libportaudiocpp0
+
+      - name: "🧪 Set up test environment"
+        run: |
+          # Create fake AWS credentials directory for boto3
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOF
+          [default]
+          aws_access_key_id = test-access-key-id
+          aws_secret_access_key = test-secret-access-key
+          region = us-east-1
+          EOF
+
+          cat > ~/.aws/config << EOF
+          [default]
+          region = us-east-1
+          output = json
+          EOF
+
+          echo "✅ Test environment configured with mock AWS credentials"
+
       - name: "📦 Install dependencies"
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           python -m pip install -r requirements.txt
           python -m pip install pytest pytest-asyncio pytest-xvfb
+
+      - name: "🎵 Ensure test audio file exists"
+        run: python tests/create_test_audio.py
 
       - name: "🧪 Run ${{ matrix.category }} tests"
         run: |
@@ -322,7 +352,7 @@ jobs:
         run: |
           echo "🎉 All tests passed! YMemo is ready for deployment."
           echo "📊 Test Statistics:"
-          echo "- 157 tests executed successfully"
+          echo "- 261 tests executed successfully"
           echo "- 99.4% pass rate maintained"
           echo "- Zero hardware dependencies confirmed"
           echo "- ~8 second execution time achieved"
@@ -362,7 +392,7 @@ jobs:
             ${testEmoji} **Tests**: ${testResult}
 
             ### 📊 Test Summary
-            - **Total Tests**: 157
+            - **Total Tests**: 261
             - **Execution Time**: ~8 seconds
             - **Hardware Dependencies**: None (fully mocked)
             - **Test Categories**: Providers, AWS, Audio, Config, Unit
