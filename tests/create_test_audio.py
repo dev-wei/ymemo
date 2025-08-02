@@ -7,7 +7,9 @@ import wave
 
 import numpy as np
 
-sys.path.append("/Users/mweiwei/src/ymemo")
+# Add project root to sys.path for imports (work in any environment)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(project_root)
 
 
 def create_test_audio():
@@ -46,8 +48,8 @@ def create_test_audio():
     audio = np.clip(audio, -1, 1)
     audio_int16 = (audio * 32767).astype(np.int16)
 
-    # Create test directory if it doesn't exist
-    test_dir = "/Users/mweiwei/src/ymemo/tests"
+    # Create test directory if it doesn't exist (relative to script location)
+    test_dir = os.path.dirname(os.path.abspath(__file__))
     os.makedirs(test_dir, exist_ok=True)
 
     # Write WAV file

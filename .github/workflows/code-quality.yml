@@ -52,17 +52,17 @@ jobs:
       - name: "📥 Checkout repository"
         uses: actions/checkout@v4
 
-      - name: "🐍 Set up Python 3.12"
+      - name: "🐍 Set up Python 3.11"
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: "📦 Cache pip dependencies"
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: lint-pip-3.12-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: lint-pip-3.12-
+          key: lint-pip-3.11-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: lint-pip-3.11-
 
       - name: "🔧 Install system dependencies (Ubuntu)"
         run: |
@@ -109,10 +109,10 @@ jobs:
       - name: "📥 Checkout repository"
         uses: actions/checkout@v4
 
-      - name: "🐍 Set up Python 3.12"
+      - name: "🐍 Set up Python 3.11"
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: "📦 Install documentation tools"
         run: |
@@ -142,10 +142,10 @@ jobs:
       - name: "📥 Checkout repository"
         uses: actions/checkout@v4
 
-      - name: "🐍 Set up Python 3.12"
+      - name: "🐍 Set up Python 3.11"
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: "🔧 Install system dependencies (Ubuntu)"
         run: |
