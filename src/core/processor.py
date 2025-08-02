@@ -242,6 +242,107 @@ class AudioProcessor:
                     f"Failed to initialize audio processor providers: {e}"
                 ) from e
 
+    def update_transcription_provider(
+        self, provider_name: str, config: dict[str, Any] | None = None
+    ) -> None:
+        """Hot-swap transcription provider with fresh configuration.
+
+        This method allows updating the transcription provider (e.g., with new language settings)
+        without disrupting the entire AudioProcessor. Must be called when not recording.
+
+        Args:
+            provider_name: Name of the transcription provider ('aws', 'azure', etc.)
+            config: Configuration dict for the new provider (uses fresh system config if None)
+
+        Raises:
+            RuntimeError: If called while recording is active
+            ValueError: If provider creation fails
+        """
+        if self.is_running:
+            logger.error(
+                "🚫 Cannot update transcription provider while recording is active"
+            )
+            raise RuntimeError(
+                "Cannot update transcription provider while recording is active"
+            )
+
+        try:
+            logger.info(f"🔄 Updating transcription provider to: {provider_name}")
+
+            # Get fresh configuration if not provided
+            if config is None:
+                fresh_config = get_config()
+                if provider_name == "aws":
+                    config = {
+                        "region": fresh_config.aws_region,
+                        "language_code": fresh_config.aws_language_code,  # Fresh language!
+                        "connection_strategy": fresh_config.aws_connection_strategy,
+                        "dual_fallback_enabled": fresh_config.aws_dual_fallback_enabled,
+                        "channel_balance_threshold": fresh_config.aws_channel_balance_threshold,
+                        "dual_connection_test_mode": fresh_config.aws_dual_connection_test_mode,
+                        "dual_save_split_audio": fresh_config.aws_dual_save_split_audio,
+                        "dual_save_raw_audio": fresh_config.aws_dual_save_raw_audio,
+                        "dual_audio_save_path": fresh_config.aws_dual_audio_save_path,
+                        "dual_audio_save_duration": fresh_config.aws_dual_audio_save_duration,
+                    }
+                elif provider_name == "azure":
+                    config = {
+                        "speech_key": fresh_config.azure_speech_key,
+                        "region": fresh_config.azure_speech_region,
+                        "language_code": fresh_config.azure_speech_language,  # Fresh language!
+                        "endpoint": fresh_config.azure_speech_endpoint,
+                        "enable_speaker_diarization": fresh_config.azure_enable_speaker_diarization,
+                        "max_speakers": fresh_config.azure_max_speakers,
+                        "timeout": fresh_config.azure_speech_timeout,
+                    }
+                else:
+                    config = {}
+
+            logger.info(
+                f"🌐 New language code will be: {config.get('language_code', 'not specified')}"
+            )
+
+            # Clean up old provider if it exists
+            if self.transcription_provider:
+                try:
+                    # Unregister from resource manager
+                    self.resource_manager.unregister_resource("transcription_provider")
+                    logger.debug("🧹 Cleaned up old transcription provider")
+                except Exception as e:
+                    logger.warning(
+                        f"⚠️ Error cleaning up old transcription provider: {e}"
+                    )
+
+            # Create new provider with fresh config
+            self.transcription_provider = (
+                AudioProcessorFactory.create_transcription_provider(
+                    provider_name, **config
+                )
+            )
+
+            # Register new provider with resource manager
+            self.resource_manager.register_resource(
+                "transcription_provider",
+                self.transcription_provider,
+                cleanup_func=self._cleanup_transcription_provider,
+                timeout=8.0,
+            )
+
+            # Update provider name for future reference
+            self.transcription_provider_name = provider_name
+            self.transcription_config = config
+
+            logger.info(
+                f"✅ Transcription provider updated successfully to {provider_name}"
+            )
+            logger.info(
+                f"🌐 Active language code: {config.get('language_code', 'unknown')}"
+            )
+
+        except Exception as e:
+            logger.error(f"❌ Failed to update transcription provider: {e}")
+            raise ValueError(f"Failed to update transcription provider: {e}") from e
+
     async def start_recording(self, device_id: int | None = None) -> None:
         """Start real-time audio recording and transcription.
 

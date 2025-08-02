@@ -4,6 +4,12 @@ import logging
 
 import gradio as gr
 
+from src.config.language_config import get_default_language, get_language_choices
+from src.config.provider_config import (
+    get_current_provider_from_env,
+    get_display_name_from_key,
+    get_provider_choices,
+)
 from src.managers.session_manager import get_audio_session
 from src.utils.status_manager import status_manager
 
@@ -30,10 +36,12 @@ from .interface_handlers import (
 )
 from .interface_styles import APP_CSS, APP_JS
 from .interface_utils import load_meetings_data
+from .language_handlers import get_current_language_info, handle_language_change
 from .meeting_handlers import (
     delete_meeting_by_id_input,
     submit_new_meeting,
 )
+from .provider_handlers import get_current_provider_info, handle_provider_change
 from .recording_handlers import (
     start_recording,
     stop_recording,
@@ -79,6 +87,96 @@ def create_header():
             """,
             elem_classes=["header-text"],
         )
+
+
+def create_sidebar():
+    """Create collapsible sidebar with Settings and Performance sections."""
+    with gr.Sidebar(
+        open=False, position="left", width=UI_DIMENSIONS["sidebar_width"]
+    ) as sidebar:
+        # Settings Section
+        gr.Markdown(UI_TEXT["sidebar_settings_title"])
+        with gr.Group():
+            # Theme selector
+            theme_dropdown = gr.Dropdown(
+                choices=list(AVAILABLE_THEMES.keys()),
+                value=DEFAULT_THEME,
+                label=FORM_LABELS["theme_selector"],
+                interactive=True,
+            )
+            # Audio quality placeholder
+            audio_quality_display = gr.Textbox(
+                label=FORM_LABELS["audio_quality"],
+                value=DEFAULT_VALUES["audio_quality"],
+                interactive=False,
+            )
+            # Language selection - now interactive with full language support
+            language_dropdown = gr.Dropdown(
+                label=FORM_LABELS["language_selection"],
+                choices=get_language_choices(),
+                value=get_default_language(),
+                interactive=True,
+            )
+            # Language information display
+            language_info_display = gr.HTML(
+                value=get_current_language_info(get_default_language()),
+                label=FORM_LABELS["language_info"],
+            )
+            # Transcription provider dropdown - now interactive
+            provider_dropdown = gr.Dropdown(
+                label=FORM_LABELS["transcription_provider"],
+                choices=get_provider_choices(),
+                value=get_display_name_from_key(get_current_provider_from_env()),
+                interactive=True,
+            )
+            # Provider information display
+            provider_info_display = gr.HTML(
+                value=get_current_provider_info(
+                    get_display_name_from_key(get_current_provider_from_env())
+                ),
+                label=FORM_LABELS["provider_details"],
+            )
+
+        # Performance Section
+        gr.Markdown(UI_TEXT["sidebar_performance_title"])
+        with gr.Group():
+            # Connection status
+            connection_status = gr.HTML(
+                value=DEFAULT_VALUES["connection_status"],
+                label=FORM_LABELS["connection_status"],
+            )
+            # Session duration
+            session_duration_display = gr.Textbox(
+                label=FORM_LABELS["session_duration"],
+                value=DEFAULT_VALUES["duration_display"],
+                interactive=False,
+            )
+            # Audio level placeholder
+            audio_level_display = gr.Textbox(
+                label=FORM_LABELS["audio_level"],
+                value=DEFAULT_VALUES["audio_level"],
+                interactive=False,
+            )
+            # Memory usage placeholder
+            memory_usage_display = gr.Textbox(
+                label=FORM_LABELS["memory_usage"],
+                value=DEFAULT_VALUES["memory_usage"],
+                interactive=False,
+            )
+
+    return (
+        sidebar,
+        theme_dropdown,
+        audio_quality_display,
+        language_dropdown,
+        language_info_display,
+        provider_dropdown,
+        provider_info_display,
+        connection_status,
+        session_duration_display,
+        audio_level_display,
+        memory_usage_display,
+    )
 
 
 def create_meeting_list():
@@ -256,9 +354,24 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
         # Header
         create_header()
 
+        # Sidebar - Hidden by default, collapsible
+        (
+            sidebar,
+            sidebar_theme_dropdown,
+            sidebar_audio_quality,
+            sidebar_language_dropdown,
+            sidebar_language_info,
+            sidebar_provider_dropdown,
+            sidebar_provider_info,
+            sidebar_connection_status,
+            sidebar_session_duration,
+            sidebar_audio_level,
+            sidebar_memory_usage,
+        ) = create_sidebar()
+
         # Responsive layout structure
-        # Desktop: [Meeting List] [Live Dialog] [Audio Controls]
-        # Mobile: [Meeting List - Full Width] then [Live Dialog] [Audio Controls]
+        # Desktop: [Sidebar (hidden)] [Meeting List] [Live Dialog] [Audio Controls]
+        # Mobile: [Sidebar (hidden)] [Meeting List - Full Width] then [Live Dialog] [Audio Controls]
 
         # Meeting List - Full width on mobile, partial on desktop
         (
@@ -308,6 +421,26 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
 
         # Wire up event handlers
         refresh_btn.click(fn=refresh_devices, outputs=[device_dropdown, status_text])
+
+        # Language selection handler
+        sidebar_language_dropdown.change(
+            fn=lambda lang: (
+                handle_language_change(lang)[0],
+                get_current_language_info(lang),
+            ),
+            inputs=[sidebar_language_dropdown],
+            outputs=[status_text, sidebar_language_info],
+        )
+
+        # Provider selection handler
+        sidebar_provider_dropdown.change(
+            fn=lambda provider, current_lang: (
+                handle_provider_change(provider, current_lang)[0],
+                get_current_provider_info(provider),
+            ),
+            inputs=[sidebar_provider_dropdown, sidebar_language_dropdown],
+            outputs=[status_text, sidebar_provider_info],
+        )
 
         start_btn.click(
             fn=start_recording,

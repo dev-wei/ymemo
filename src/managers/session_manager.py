@@ -337,6 +337,51 @@ class AudioSessionManager:
                 logger.warning(f"⚠️ SessionManager: Error closing background loop: {e}")
             logger.debug("🔄 SessionManager: Async audio processing loop closed")
 
+    def _refresh_transcription_provider(self) -> bool:
+        """Refresh transcription provider with latest configuration (including language changes).
+
+        This method ensures that any language changes made through the UI are applied
+        to the transcription provider before starting a new recording session.
+
+        Returns:
+            True if provider was successfully updated, False otherwise
+        """
+        try:
+            if not self.audio_processor:
+                logger.warning("⚠️ No AudioProcessor available for provider refresh")
+                return False
+
+            logger.info(
+                "🔄 Refreshing transcription provider with latest configuration..."
+            )
+
+            # Get current system configuration (includes any environment variable updates)
+            from config.audio_config import get_config
+
+            fresh_config = get_config()
+
+            # Log the language codes that will be used
+            if fresh_config.transcription_provider == "aws":
+                logger.info(f"🌐 AWS language code: {fresh_config.aws_language_code}")
+            elif fresh_config.transcription_provider == "azure":
+                logger.info(
+                    f"🌐 Azure language code: {fresh_config.azure_speech_language}"
+                )
+
+            # Update the transcription provider with fresh config
+            self.audio_processor.update_transcription_provider(
+                fresh_config.transcription_provider
+            )
+
+            logger.info(
+                "✅ Transcription provider refreshed with latest language settings"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to refresh transcription provider: {e}")
+            return False
+
     def start_recording(self, device_index: int, config: dict | None = None) -> bool:
         """Start recording session.
 
@@ -358,6 +403,15 @@ class AudioSessionManager:
                 logger.info(
                     f"🎯 SessionManager: Starting recording with device {device_index}"
                 )
+
+                # Refresh transcription provider with latest language configuration
+                logger.info(
+                    "🌐 Ensuring transcription provider has latest language settings..."
+                )
+                if not self._refresh_transcription_provider():
+                    logger.warning(
+                        "⚠️ Failed to refresh transcription provider, continuing with existing settings"
+                    )
 
                 # Clear stop event for new recording session
                 self._stop_event.clear()

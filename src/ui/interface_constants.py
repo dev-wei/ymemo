@@ -36,6 +36,8 @@ UI_TEXT = {
     "meeting_list_title": "### Meeting List",
     "live_dialog_title": "### Live Dialog",
     "audio_controls_title": "### Audio Controls",
+    "sidebar_settings_title": "### ⚙️ Settings",
+    "sidebar_performance_title": "### 📊 Performance",
 }
 
 # Placeholder text constants
@@ -45,7 +47,11 @@ PLACEHOLDER_TEXT = {
 }
 
 # UI dimensions
-UI_DIMENSIONS = {"dialog_height": 800, "timer_interval": 0.5}
+UI_DIMENSIONS = {
+    "dialog_height": 800,
+    "timer_interval": 0.5,
+    "sidebar_width": 320,
+}
 
 # Table headers
 TABLE_HEADERS = {"meeting_list": ["ID", "Meeting", "Date", "Duration", "Length"]}
@@ -56,6 +62,17 @@ FORM_LABELS = {
     "duration": "Duration",
     "audio_device": "Audio Device",
     "status": "Status",
+    "theme_selector": "Theme",
+    "audio_quality": "Audio Quality",
+    "language": "Language",
+    "language_selection": "Language Selection",
+    "language_info": "Language Information",
+    "transcription_provider": "Transcription Provider",
+    "provider_details": "Provider Details",
+    "connection_status": "Connection Status",
+    "session_duration": "Session Duration",
+    "audio_level": "Audio Level",
+    "memory_usage": "Memory Usage",
 }
 
 # Duration formatting
@@ -70,6 +87,17 @@ DURATION_FORMAT = {
 DEFAULT_VALUES = {
     "duration_display": DURATION_FORMAT["default_display"],
     "no_devices": "No devices",
+    "connection_status": "<span style='color: green;'>● Connected</span>",
+    "audio_quality": "High",
+    "language_selection": "English (US)",  # Updated to match language config
+    "transcription_provider": "AWS Transcribe",  # Default provider for display
+    "audio_level": "Normal",
+    "memory_usage": "45MB",
+    "language_change_success": "✅ Language updated successfully",
+    "language_change_error": "❌ Failed to change language",
+    "provider_change_success": "✅ Provider updated successfully",
+    "provider_change_error": "❌ Failed to change provider",
+    "provider_not_available": "⚠️ Provider not available",
 }
 
 # Copy functionality
