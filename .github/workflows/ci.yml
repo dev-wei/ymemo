@@ -218,6 +218,7 @@ jobs:
         with:
           name: coverage-reports-${{ matrix.python-version }}
           path: |
+            .coverage
             coverage.xml
             htmlcov/
           retention-days: 30
