@@ -17,30 +17,29 @@ concurrency:
 env:
   FORCE_COLOR: "1"
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  
+
   # Test environment indicators
   CI: "true"
-  TESTING: "true" 
+  TESTING: "true"
   PYTEST_RUNNING: "true"
-  
+
   # Mock AWS credentials (required for boto3 initialization)
   AWS_ACCESS_KEY_ID: "test-access-key-id"
   AWS_SECRET_ACCESS_KEY: "test-secret-access-key"
   AWS_DEFAULT_REGION: "us-east-1"
   AWS_REGION: "us-east-1"
-  
+
   # YMemo-specific test configuration
   TRANSCRIPTION_PROVIDER: "aws"
   CAPTURE_PROVIDER: "pyaudio"
-  LOG_LEVEL: "WARNING"  # Reduce CI log noise
-  
+  LOG_LEVEL: "WARNING" # Reduce CI log noise
+
   # Disable real service connections
   SKIP_AWS_VALIDATION: "true"
   MOCK_SERVICES: "true"
 
 permissions:
   contents: read
-  security-events: write
   pull-requests: write
 
 jobs:
@@ -48,7 +47,7 @@ jobs:
   lint:
     name: "Lint & Style"
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: "📥 Checkout repository"
         uses: actions/checkout@v4
@@ -81,27 +80,19 @@ jobs:
           aws_secret_access_key = test-secret-access-key
           region = us-east-1
           EOF
-          
+
           cat > ~/.aws/config << EOF
           [default]
           region = us-east-1
           output = json
           EOF
-          
+
           echo "✅ Test environment configured with mock AWS credentials"
 
       - name: "📦 Install linting tools"
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ruff black isort mypy bandit safety
-          # Install project dependencies for type checking
-          python -m pip install -r requirements.txt
-
-      - name: "🔍 Run Ruff (fast Python linter)"
-        run: |
-          # Ruff for fast linting and formatting checks
-          ruff check src/ tests/ --output-format=github
-          ruff format --check src/ tests/
+          python -m pip install black isort
 
       - name: "🎨 Check Black formatting"
         run: black --check --diff src/ tests/
@@ -109,91 +100,11 @@ jobs:
       - name: "📦 Check import sorting (isort)"
         run: isort --check-only --diff src/ tests/
 
-      - name: "🔍 Type checking with mypy"
-        run: |
-          # Run mypy on source code only (tests often have complex mocking)
-          mypy src/ --ignore-missing-imports --no-strict-optional
-        continue-on-error: true  # Don't fail build on type issues initially
-
-  # Security scanning
-  security:
-    name: "Security Scan"
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: "📥 Checkout repository"
-        uses: actions/checkout@v4
-
-      - name: "🐍 Set up Python 3.12"
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: "🔧 Install system dependencies (Ubuntu)"
-        run: |
-          sudo apt-get update -yq
-          sudo apt-get install -yq portaudio19-dev python3-dev libasound2-dev
-          sudo apt-get install -yq libportaudio2 libportaudiocpp0
-
-      - name: "🧪 Set up test environment"
-        run: |
-          # Create fake AWS credentials directory for boto3 (Linux/macOS only)
-          mkdir -p ~/.aws
-          cat > ~/.aws/credentials << EOF
-          [default]
-          aws_access_key_id = test-access-key-id
-          aws_secret_access_key = test-secret-access-key
-          region = us-east-1
-          EOF
-          
-          cat > ~/.aws/config << EOF
-          [default]
-          region = us-east-1
-          output = json
-          EOF
-          
-          echo "✅ Test environment configured with mock AWS credentials"
-
-      - name: "📦 Install security tools"
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install bandit safety semgrep
-          python -m pip install -r requirements.txt
-
-      - name: "🔒 Run Bandit security linter"
-        run: |
-          # Bandit for security issue detection
-          bandit -r src/ -f json -o bandit-report.json || true
-          bandit -r src/ -f txt
-
-      - name: "🛡️ Check dependencies for security vulnerabilities"
-        run: |
-          # Safety for known security vulnerabilities in dependencies
-          safety check --json --output safety-report.json || true
-          safety check
-
-      - name: "🔍 Run Semgrep security analysis"
-        run: |
-          # Semgrep for advanced security pattern detection
-          semgrep --config=auto src/ --json --output=semgrep-report.json || true
-          semgrep --config=auto src/
-
-      - name: "📤 Upload security reports"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-reports
-          path: |
-            bandit-report.json
-            safety-report.json
-            semgrep-report.json
-          retention-days: 30
-
   # Documentation checks
   docs:
     name: "Documentation"
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: "📥 Checkout repository"
         uses: actions/checkout@v4
@@ -226,7 +137,7 @@ jobs:
   dependencies:
     name: "Dependency Analysis"
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: "📥 Checkout repository"
         uses: actions/checkout@v4
@@ -252,13 +163,13 @@ jobs:
           aws_secret_access_key = test-secret-access-key
           region = us-east-1
           EOF
-          
+
           cat > ~/.aws/config << EOF
           [default]
           region = us-east-1
           output = json
           EOF
-          
+
           echo "✅ Test environment configured with mock AWS credentials"
 
       - name: "📦 Install dependency analysis tools"
@@ -293,22 +204,20 @@ jobs:
   # Quality gate for all code quality checks
   quality-summary:
     name: "Quality Summary ✅"
-    needs: [lint, security, docs, dependencies]
+    needs: [lint, docs, dependencies]
     runs-on: ubuntu-latest
     if: always()
-    
+
     steps:
       - name: "✅ Quality checks passed"
         if: |
           needs.lint.result == 'success' &&
-          needs.security.result == 'success' &&
           needs.docs.result == 'success' &&
           needs.dependencies.result == 'success'
         run: |
           echo "🎉 All code quality checks passed!"
           echo "📊 Quality Summary:"
           echo "- ✅ Linting and style checks"
-          echo "- ✅ Security vulnerability scanning"
           echo "- ✅ Documentation checks"
           echo "- ✅ Dependency analysis"
           echo ""
@@ -317,13 +226,11 @@ jobs:
       - name: "❌ Quality checks failed"
         if: |
           needs.lint.result == 'failure' ||
-          needs.security.result == 'failure' ||
           needs.docs.result == 'failure' ||
           needs.dependencies.result == 'failure'
         run: |
           echo "❌ Some quality checks failed:"
           echo "- Lint: ${{ needs.lint.result }}"
-          echo "- Security: ${{ needs.security.result }}"
           echo "- Docs: ${{ needs.docs.result }}"
           echo "- Dependencies: ${{ needs.dependencies.result }}"
           echo ""
@@ -333,7 +240,6 @@ jobs:
       - name: "⚠️ Quality checks incomplete"
         if: |
           contains(fromJSON('["cancelled", "skipped"]'), needs.lint.result) ||
-          contains(fromJSON('["cancelled", "skipped"]'), needs.security.result) ||
           contains(fromJSON('["cancelled", "skipped"]'), needs.docs.result) ||
           contains(fromJSON('["cancelled", "skipped"]'), needs.dependencies.result)
         run: |

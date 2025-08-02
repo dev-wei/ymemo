@@ -54,9 +54,8 @@ updates:
 
     # Allow specific dependency updates
     allow:
-      - dependency-type: "direct" # Only direct dependencies
-      - dependency-type: "indirect" # Also indirect for security updates
-        update-type: "security-update"
+      - dependency-type: "direct" # Direct dependencies
+      - dependency-type: "indirect" # Indirect dependencies (includes security updates)
 
     # Ignore specific problematic updates if needed
     ignore:
