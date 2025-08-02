@@ -171,10 +171,31 @@ jobs:
             --tb=short \
             --durations=10
 
-          # Verify coverage files were created
-          echo "📊 Coverage files generated:"
-          ls -la .coverage* coverage.xml 2>/dev/null || echo "Some coverage files missing"
-          echo "📁 Coverage directories:"
+          # Verify coverage files were created with detailed debugging
+          echo "📊 Coverage files verification:"
+          echo "Working directory: $(pwd)"
+          echo "All files in current directory:"
+          ls -la
+          echo ""
+          echo "Coverage-related files:"
+          find . -name "*coverage*" -o -name ".coverage*" -type f | sort
+          echo ""
+          echo "Coverage database file check:"
+          if [ -f ".coverage" ]; then
+            echo "✅ .coverage database file found ($(stat -c%s .coverage 2>/dev/null || stat -f%z .coverage) bytes)"
+            file .coverage
+          else
+            echo "❌ .coverage database file NOT found"
+          fi
+          echo ""
+          echo "Coverage XML file check:"
+          if [ -f "coverage.xml" ]; then
+            echo "✅ coverage.xml found ($(stat -c%s coverage.xml 2>/dev/null || stat -f%z coverage.xml) bytes)"
+          else
+            echo "❌ coverage.xml NOT found"
+          fi
+          echo ""
+          echo "Coverage directories:"
           ls -la htmlcov/ coverage_reports/ 2>/dev/null || echo "Some coverage directories missing"
 
       - name: "🧪 Run essential tests (cross-platform)"
@@ -310,24 +331,47 @@ jobs:
           ls -la
           echo "📊 Coverage files found:"
           find . -name "*coverage*" -o -name ".coverage*" | sort
+          echo ""
+          echo "📊 Downloaded artifact contents:"
+          if [ -f ".coverage" ]; then
+            echo "✅ .coverage database found - $(stat -c%s .coverage 2>/dev/null || stat -f%z .coverage) bytes"
+          else
+            echo "❌ .coverage database NOT found"
+          fi
+          if [ -f "coverage.xml" ]; then
+            echo "✅ coverage.xml found - $(stat -c%s coverage.xml 2>/dev/null || stat -f%z coverage.xml) bytes"
+          else
+            echo "❌ coverage.xml NOT found"
+          fi
 
       - name: "📊 Generate coverage report"
         run: |
-          # Check if coverage data files exist
-          echo "📋 Checking for coverage files..."
-          ls -la .coverage* coverage.xml 2>/dev/null || echo "Coverage files not found"
-          echo "📁 Coverage directories:"
-          ls -la htmlcov/ coverage_reports/ 2>/dev/null || echo "Coverage directories not found"
+          # Enhanced coverage file validation with fallback
+          echo "📋 Coverage analysis starting..."
 
-          # Generate coverage report and add to step summary
-          echo "📊 Generating coverage report..."
-          python -m coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
+          if [ -f ".coverage" ]; then
+            echo "✅ Using .coverage database file"
+            # Generate coverage report and add to step summary
+            echo "📊 Generating coverage report..."
+            python -m coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
 
-          # Generate detailed HTML report (already exists from pytest, but ensure it's current)
-          python -m coverage html --skip-covered --skip-empty
+            # Generate detailed HTML report
+            python -m coverage html --skip-covered --skip-empty
 
-          # Check coverage threshold (relaxed for development)
-          python -m coverage report --fail-under=25
+            # Check coverage threshold (relaxed for development)
+            python -m coverage report --fail-under=25
+
+          elif [ -f "coverage.xml" ]; then
+            echo "⚠️ .coverage database not found, attempting XML fallback"
+            echo "XML fallback not implemented yet - coverage analysis requires .coverage database file"
+            exit 1
+          else
+            echo "❌ No coverage data found (.coverage or coverage.xml)"
+            echo "Available files:"
+            ls -la
+            echo "Coverage analysis failed - no data to process"
+            exit 1
+          fi
 
       - name: "📤 Upload HTML coverage report"
         if: always()
