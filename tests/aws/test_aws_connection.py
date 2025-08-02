@@ -38,9 +38,12 @@ class TestAWSConnectionMocking(BaseAsyncTest):
         mock_client = Mock()
         mock_client.start_stream_transcription = AsyncMock(return_value=mock_stream)
 
-        with patch("boto3.Session", return_value=mock_session), patch(
-            "amazon_transcribe.client.TranscribeStreamingClient",
-            return_value=mock_client,
+        with (
+            patch("boto3.Session", return_value=mock_session),
+            patch(
+                "amazon_transcribe.client.TranscribeStreamingClient",
+                return_value=mock_client,
+            ),
         ):
             # Test credential access
             credentials = mock_session.get_credentials()
