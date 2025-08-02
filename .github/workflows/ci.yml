@@ -296,13 +296,28 @@ jobs:
           name: coverage-reports-3.11
           path: .
 
+      - name: "🔍 Verify downloaded coverage files"
+        run: |
+          echo "📋 Files in current directory:"
+          ls -la
+          echo "📊 Coverage files found:"
+          find . -name "*coverage*" -o -name ".coverage*" | sort
+
       - name: "📊 Generate coverage report"
         run: |
+          # Check if coverage data files exist
+          echo "📋 Checking for coverage files..."
+          ls -la .coverage* coverage.xml || echo "Coverage files not found"
+
+          # Verify coverage data
+          echo "📊 Coverage data info:"
+          python -m coverage report --show-missing || echo "Unable to read coverage data"
+
           # Generate coverage report and add to step summary
-          python -m coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
+          python -m coverage report --format=markdown >> $GITHUB_STEP_SUMMARY || echo "Failed to generate markdown report"
 
           # Generate detailed HTML report
-          python -m coverage html --skip-covered --skip-empty
+          python -m coverage html --skip-covered --skip-empty || echo "Failed to generate HTML report"
 
           # Check coverage threshold (relaxed for development)
           python -m coverage report --fail-under=25
