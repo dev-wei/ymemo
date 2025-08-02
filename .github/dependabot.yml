@@ -12,10 +12,10 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Etc/UTC"
-    
+
     # Keep PRs focused and manageable
     open-pull-requests-limit: 5
-    
+
     # Grouping strategy for related updates
     groups:
       # Group AWS-related dependencies
@@ -25,72 +25,72 @@ updates:
           - "botocore*"
           - "amazon-transcribe*"
           - "awscli*"
-      
+
       # Group Azure dependencies
       azure-dependencies:
         patterns:
           - "azure-*"
-      
+
       # Group audio processing dependencies
       audio-dependencies:
         patterns:
           - "pyaudio*"
           - "numpy*"
           - "scipy*"
-      
+
       # Group testing dependencies
       testing-dependencies:
         patterns:
           - "pytest*"
           - "coverage*"
           - "mock*"
-      
+
       # Group UI dependencies
       ui-dependencies:
         patterns:
           - "gradio*"
           - "fastapi*"
           - "uvicorn*"
-    
+
     # Allow specific dependency updates
     allow:
-      - dependency-type: "direct"  # Only direct dependencies
-      - dependency-type: "indirect"  # Also indirect for security updates
+      - dependency-type: "direct" # Only direct dependencies
+      - dependency-type: "indirect" # Also indirect for security updates
         update-type: "security-update"
-    
+
     # Ignore specific problematic updates if needed
     ignore:
       # Example: ignore major version updates for stable dependencies
       # - dependency-name: "gradio"
       #   update-types: ["version-update:semver-major"]
-      
+
       # Ignore development dependencies major updates to maintain stability
       - dependency-name: "pytest"
         update-types: ["version-update:semver-major"]
-    
+
     # Commit message configuration
     commit-message:
       prefix: "deps"
       prefix-development: "deps-dev"
       include: "scope"
-    
+
     # Pull request configuration
     pull-request-branch-name:
       separator: "/"
-    
+
     # Reviewers and assignees (customize based on your team)
     reviewers:
-      - "dev-wei"  # Replace with actual GitHub username
-    
+      - "dev-wei" # Replace with actual GitHub username
+
     # Labels for easy identification and automation
     labels:
       - "dependencies"
       - "automated"
       - "python"
-    
+
     # Target branch for PRs
     target-branch: "main"
-    
+
     # Auto-merge configuration for patch updates (optional, be careful!)
     # enable-beta-ecosystems: true
 
@@ -102,24 +102,24 @@ updates:
       day: "tuesday"
       time: "09:00"
       timezone: "Etc/UTC"
-    
+
     open-pull-requests-limit: 3
-    
+
     # Group GitHub Actions updates
     groups:
       github-actions:
         patterns:
           - "*"
-    
+
     commit-message:
       prefix: "ci"
       include: "scope"
-    
+
     labels:
       - "dependencies"
       - "github-actions"
       - "ci/cd"
-    
+
     target-branch: "main"
 
   # Docker dependencies (if you add Dockerfile in the future)
@@ -130,9 +130,9 @@ updates:
   #     day: "wednesday"
   #     time: "09:00"
   #     timezone: "UTC"
-  #   
+  #
   #   open-pull-requests-limit: 2
-  #   
+  #
   #   labels:
   #     - "dependencies"
   #     - "docker"

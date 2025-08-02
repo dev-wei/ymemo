@@ -7,6 +7,7 @@ This document provides comprehensive documentation for the YMemo test suite, whi
 ## Overview
 
 **Migration Results:**
+
 - **157 tests** across 12 core files with **99.4% pass rate** (1 skipped)
 - **~8 seconds execution time** (7.5x performance improvement)
 - **Zero hardware dependencies** - all tests run without PyAudio/AWS/device access
@@ -54,24 +55,28 @@ tests/
 **Location**: `tests/providers/`
 
 **test_provider_factory.py** (19 tests):
+
 - Factory pattern behavior and provider registration
 - AudioProcessorFactory functionality
 - Provider discovery and listing
 - Factory configuration validation
 
 **test_provider_lifecycle.py** (17 tests):
+
 - Provider initialization and cleanup
 - Resource management and state tracking
 - Thread safety in provider operations
 - Provider reuse patterns
 
 **test_provider_error_handling.py** (11 tests):
+
 - Error handling across provider operations
 - Exception propagation and recovery
 - Provider failure scenarios
 - Graceful degradation patterns
 
 **test_azure_provider.py** (17 tests):
+
 - Azure Speech Service provider configuration
 - Provider creation and initialization
 - Azure SDK integration mocking
@@ -79,6 +84,7 @@ tests/
 - Authentication and network error handling
 
 **test_dual_provider_system.py** (17 tests):
+
 - Dual AWS Transcribe provider architecture
 - Channel splitting functionality
 - Stereo audio processing
@@ -90,6 +96,7 @@ tests/
 **Location**: `tests/aws/`
 
 **test_aws_connection.py** (9 tests):
+
 - AWS Transcribe connection mocking
 - Streaming API lifecycle testing
 - Credential validation scenarios
@@ -101,6 +108,7 @@ tests/
 **Location**: `tests/audio/`
 
 **test_device_selection.py** (10 tests):
+
 - Device enumeration and selection
 - Device validation and format checking
 - Unicode device name handling
@@ -108,6 +116,7 @@ tests/
 - Status manager integration
 
 **test_device_capability.py** (29 tests):
+
 - Audio device capability detection
 - Format support validation
 - Hardware-independent device testing
@@ -119,6 +128,7 @@ tests/
 **Location**: `tests/unit/`
 
 **test_enhanced_session_manager.py** (17 tests):
+
 - Session manager lifecycle
 - State management and transitions
 - Transcription buffer operations
@@ -126,6 +136,7 @@ tests/
 - Event handling patterns
 
 **test_session_manager_stop.py** (12 tests):
+
 - Stop recording functionality
 - Session cleanup procedures
 - Thread coordination and signaling
@@ -137,12 +148,14 @@ tests/
 **Location**: `tests/config/`
 
 **test_audio_config_validation.py** (8 tests):
+
 - Environment variable parsing validation
 - Configuration object creation and validation  
 - Default value handling
 - Invalid value graceful handling
 
 **test_configuration_parsing.py** (8 tests):
+
 - Safe parsing of integer/float/boolean values
 - Error handling for malformed environment variables
 - Configuration merging and override behavior
@@ -153,6 +166,7 @@ tests/
 ### Base Test Classes
 
 **BaseTest** (`tests/base/base_test.py`):
+
 ```python
 class BaseTest:
     """Base class for all unit tests with common setup/teardown"""
@@ -163,6 +177,7 @@ class BaseTest:
 ```
 
 **BaseIntegrationTest** (`tests/base/base_test.py`):
+
 ```python
 class BaseIntegrationTest(BaseTest):
     """Base class for integration tests"""
@@ -172,6 +187,7 @@ class BaseIntegrationTest(BaseTest):
 ```
 
 **BaseAsyncTest** (`tests/base/async_test_base.py`):
+
 ```python
 class BaseAsyncTest(BaseTest):
     """Base class for async tests"""
@@ -184,17 +200,20 @@ class BaseAsyncTest(BaseTest):
 ### Mock Factories
 
 **Mock Object Factories** (`tests/fixtures/mock_factories.py`):
+
 - `MockAudioProcessorFactory` - Standardized AudioProcessor mocks
 - `MockProviderFactory` - Provider mocks with interface compliance
 - `MockSessionManagerFactory` - Session manager mocks with state management
 - `MockTranscriptionResultFactory` - Transcription result objects
 
 **Async Testing Utilities** (`tests/fixtures/async_mocks.py`):
+
 - `AsyncIteratorMock` - Mock async iterators
 - `AsyncContextManagerMock` - Mock async context managers
 - `AsyncProviderMock` - Async provider implementations
 
 **AWS Mocking Patterns** (`tests/fixtures/aws_mocks.py`):
+
 - Complete AWS Transcribe streaming mocks
 - Credential and region mocking
 - Response stream simulation
@@ -202,6 +221,7 @@ class BaseAsyncTest(BaseTest):
 ### Central Fixtures
 
 **pytest Configuration** (`tests/conftest.py`):
+
 ```python
 # Key fixtures available to all tests
 @pytest.fixture
@@ -217,6 +237,7 @@ def clean_session_manager()     # Fresh session manager instance
 ## Running Tests
 
 ### Prerequisites
+
 ```bash
 # Ensure virtual environment is active
 source .venv/bin/activate
@@ -228,12 +249,14 @@ pip install -r requirements.txt
 ### Basic Commands
 
 **Run All Migrated Tests:**
+
 ```bash
 # Complete migrated test suite (157 tests, ~8 seconds)
 python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ -v
 ```
 
 **Run by Category:**
+
 ```bash
 # Provider functionality tests (64 tests)
 python -m pytest tests/providers/ -v
@@ -252,6 +275,7 @@ python -m pytest tests/config/ -v
 ```
 
 **Run Specific Files:**
+
 ```bash
 # Provider factory tests
 python -m pytest tests/providers/test_provider_factory.py -v
@@ -266,16 +290,19 @@ python -m pytest tests/audio/test_device_selection.py -v
 ### Advanced Options
 
 **With Coverage:**
+
 ```bash
 python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ --cov=src --cov-report=html
 ```
 
 **Parallel Execution:**
+
 ```bash
 python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ -n auto
 ```
 
 **Verbose Output:**
+
 ```bash
 python -m pytest tests/providers/test_provider_factory.py -v -s
 ```
@@ -283,24 +310,28 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 ## Key Features
 
 ### Hardware Independence
+
 - **PyAudio Mocking**: All audio hardware calls are mocked
 - **AWS Credential-Free**: No AWS credentials or network calls required
 - **Device-Free Testing**: Device enumeration uses mock data
 - **Reliable Execution**: Tests run consistently in any environment
 
 ### Performance
+
 - **Fast Execution**: Full test suite runs in ~8 seconds (157 tests)
 - **Efficient Mocking**: Optimized mock objects reduce overhead
 - **Parallel-Safe**: Tests can run concurrently without conflicts
 - **Resource Cleanup**: Automatic cleanup prevents memory leaks
 
 ### Maintainability
+
 - **Consistent Patterns**: All tests follow same base class patterns
 - **Centralized Infrastructure**: Mock factories eliminate duplication
 - **Clear Organization**: Logical test categorization by functionality
 - **Comprehensive Documentation**: Every test class has detailed docstrings
 
 ### Quality Assurance
+
 - **99.4% Pass Rate**: 157 tests pass reliably (1 skipped)
 - **Comprehensive Error Testing**: Proper validation of error conditions
 - **Async Support**: Full async testing infrastructure
@@ -309,6 +340,7 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 ## Migration Benefits
 
 ### Before Migration (Legacy)
+
 - 27+ scattered test files with inconsistent frameworks
 - 278+ Mock/AsyncMock instances showing duplication
 - >60 seconds execution time with hardware timeouts
@@ -316,6 +348,7 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 - Inconsistent unittest vs pytest patterns
 
 ### After Migration (Current)
+
 - **12 organized test files** with consistent pytest infrastructure
 - **Centralized mock factories** eliminating duplication
 - **~8 seconds execution** with 99.4% reliability
@@ -323,6 +356,7 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 - **Consistent patterns** across all tests
 
 ### Performance Improvements
+
 - **7.5x faster execution** (60s → ~8s)
 - **99.4% reliability** (no hardware-dependent failures)
 - **CI/CD ready** (runs in any environment)
@@ -331,24 +365,28 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 ## Test Standards
 
 ### Test Organization
+
 - Tests categorized by functionality (providers, aws, audio, unit)
 - Clear naming conventions: `test_<category>_<functionality>.py`
 - Comprehensive docstrings for all test classes and methods
 - Logical grouping of related test methods
 
 ### Mock Strategy
+
 - Hardware-independent mocks for all external dependencies
 - Centralized mock factories for consistency
 - Proper async mock handling with AsyncMock
 - Realistic mock behavior matching actual implementations
 
 ### Error Handling
+
 - Graceful handling of missing dependencies with `pytest.skip()`
 - Comprehensive error scenario testing
 - Consistent error message validation
 - Exception propagation testing
 
 ### Performance Testing
+
 - Fast execution through effective mocking
 - Parallel-safe test design
 - Efficient fixture management
@@ -357,6 +395,7 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 ## Adding New Tests
 
 ### Guidelines
+
 1. **Choose appropriate category** (providers, aws, audio, unit)
 2. **Inherit from appropriate base class** (BaseTest, BaseIntegrationTest, BaseAsyncTest)
 3. **Use centralized fixtures** and mock factories
@@ -364,36 +403,38 @@ python -m pytest tests/providers/test_provider_factory.py -v -s
 5. **Ensure hardware independence** - no real device/service calls
 
 ### Example Test Structure
+
 ```python
 from tests.base.base_test import BaseTest
 import pytest
 
 class TestNewComponent(BaseTest):
     """Test new component functionality using migrated infrastructure."""
-    
+
     @pytest.mark.unit
     def test_component_behavior(self, mock_audio_processor):
         """Test specific component behavior."""
         # Use centralized mock factories
         processor = mock_audio_processor
-        
+
         # Test logic here
         result = processor.some_method()
-        
+
         # Assertions
         assert result is not None
 ```
 
 ### Mock Factory Usage
+
 ```python
 def test_with_factory(self, audio_processor_factory):
     """Example using centralized mock factories."""
     # Create standardized mocks
     processor = audio_processor_factory.create_basic_mock()
-    
+
     # Customize as needed
     processor.is_running = True
-    
+
     # Test with consistent mock behavior
     assert processor.is_running
 ```
@@ -401,6 +442,7 @@ def test_with_factory(self, audio_processor_factory):
 ## Legacy Test Information
 
 ### Deprecated Files
+
 The following legacy test files have been replaced by the migrated infrastructure:
 
 - `test_core_functionality.py` → Use `tests/unit/` instead
@@ -408,6 +450,7 @@ The following legacy test files have been replaced by the migrated infrastructur
 - Various unittest-based files → Use pytest-based equivalents
 
 ### Migration Complete
+
 - All critical functionality has been migrated to the new infrastructure
 - Legacy files have been cleaned up
 - No hardware dependencies remain in the test suite
@@ -418,12 +461,14 @@ The following legacy test files have been replaced by the migrated infrastructur
 ### Common Issues
 
 **Import Errors:**
+
 ```bash
 # Ensure proper Python package structure
 ls tests/__init__.py tests/base/__init__.py tests/fixtures/__init__.py
 ```
 
 **Mock Not Working:**
+
 ```python
 # Use centralized mock factories instead of creating mocks manually
 # Good:
@@ -436,6 +481,7 @@ def test_manual_mock():
 ```
 
 **Hardware Dependencies:**
+
 - All tests should use mocks and never access real hardware
 - If a test requires hardware, convert it to use mock factories
 - Check test output for any PyAudio or AWS connection attempts

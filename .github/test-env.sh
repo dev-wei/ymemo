@@ -22,7 +22,7 @@ export AWS_SECRET_ACCESS_KEY=test-secret-access-key
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_REGION=us-east-1
 
-# YMemo-specific test configuration  
+# YMemo-specific test configuration
 export TRANSCRIPTION_PROVIDER=aws
 export CAPTURE_PROVIDER=pyaudio
 export AUDIO_SAMPLE_RATE=16000
@@ -71,7 +71,7 @@ export AWS_CONFIG_FILE=~/.aws/config
 echo "✅ YMemo CI test environment configured successfully!"
 echo "🔧 Environment summary:"
 echo "   - AWS validation: DISABLED"
-echo "   - Mock services: ENABLED" 
+echo "   - Mock services: ENABLED"
 echo "   - Log level: WARNING"
 echo "   - Provider: $TRANSCRIPTION_PROVIDER"
 echo "   - Audio: ${AUDIO_SAMPLE_RATE}Hz, ${AUDIO_CHANNELS} channel(s)"
