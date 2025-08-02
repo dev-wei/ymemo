@@ -213,7 +213,12 @@ jobs:
           echo ""
 
           echo "Coverage directories:"
-          ls -la htmlcov/ coverage_reports/ 2>/dev/null || echo "Some coverage directories missing"
+          echo "Checking for htmlcov/:"
+          ls -la htmlcov/ 2>/dev/null || echo "htmlcov/ directory not found"
+          echo "Checking for coverage_reports/:"
+          ls -la coverage_reports/ 2>/dev/null || echo "coverage_reports/ directory not found"
+          echo "Checking for coverage_reports/html/:"
+          ls -la coverage_reports/html/ 2>/dev/null || echo "coverage_reports/html/ directory not found"
 
       - name: "🧪 Run essential tests (cross-platform)"
         if: matrix.test-type == 'essential'
@@ -230,15 +235,36 @@ jobs:
       # Upload coverage only from the main Ubuntu Python 3.11 job
       - name: "📊 Upload coverage reports"
         if: matrix.upload-coverage && always()
+        run: |
+          echo "📤 Preparing to upload coverage reports..."
+          echo "Files to be uploaded:"
+          echo "Checking .coverage:"
+          if [ -f ".coverage" ]; then
+            echo "✅ .coverage found - $(stat -c%s .coverage 2>/dev/null || stat -f%z .coverage) bytes"
+          else
+            echo "❌ .coverage NOT found"
+          fi
+          echo "Checking coverage.xml:"
+          if [ -f "coverage.xml" ]; then
+            echo "✅ coverage.xml found - $(stat -c%s coverage.xml 2>/dev/null || stat -f%z coverage.xml) bytes"
+          else
+            echo "❌ coverage.xml NOT found"
+          fi
+          echo "Checking directories:"
+          ls -la htmlcov/ 2>/dev/null && echo "htmlcov/ found" || echo "htmlcov/ not found"
+          ls -la coverage_reports/ 2>/dev/null && echo "coverage_reports/ found" || echo "coverage_reports/ not found"
+
+      - name: "📤 Actually upload coverage reports"
+        if: matrix.upload-coverage && always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-reports-${{ matrix.python-version }}
           path: |
-            .coverage
-            coverage.xml
-            htmlcov/
-            coverage_reports/
+            ./.coverage
+            ./coverage.xml
+            ./coverage_reports/
           retention-days: 30
+          if-no-files-found: warn
 
       # Upload test results for GitHub's test reporting
       - name: "📋 Upload test results"
@@ -395,8 +421,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html-report
-          path: htmlcov/
+          path: coverage_reports/html/
           retention-days: 30
+          if-no-files-found: warn
 
   # Quality gate - all tests must pass
   quality-gate:
