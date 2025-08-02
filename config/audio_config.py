@@ -230,7 +230,9 @@ class AudioSystemConfig:
 
         # If no device specified, return base config
         if device_id is None:
-            logger.debug("🔧 AudioConfig: No device specified, using base configuration")
+            logger.debug(
+                "🔧 AudioConfig: No device specified, using base configuration"
+            )
             return base_config
 
         try:

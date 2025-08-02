@@ -399,7 +399,9 @@ class AudioChannelSplitter:
             logger.error(f"❌ Channel splitter error after {chunk_count} chunks: {e}")
             raise
         finally:
-            logger.info(f"🔀 Channel splitter completed: {chunk_count} chunks processed")
+            logger.info(
+                f"🔀 Channel splitter completed: {chunk_count} chunks processed"
+            )
             self._log_final_statistics()
 
             # Stop audio saving if active

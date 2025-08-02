@@ -60,7 +60,9 @@ class AudioFileWriter:
         self.max_bytes = sample_rate * channels * sample_width * max_duration
 
         logger.info(f"🎵 AudioFileWriter: Initialized for {file_path}")
-        logger.info(f"   📊 Format: {sample_rate}Hz, {channels}ch, {sample_width*8}-bit")
+        logger.info(
+            f"   📊 Format: {sample_rate}Hz, {channels}ch, {sample_width*8}-bit"
+        )
         logger.info(f"   ⏱️  Max duration: {max_duration}s ({self.max_bytes:,} bytes)")
 
     def start_recording(self) -> bool:
@@ -89,7 +91,9 @@ class AudioFileWriter:
                 self.bytes_written = 0
                 self.total_samples = 0
 
-                logger.info(f"🎵 AudioFileWriter: Started recording to {self.file_path}")
+                logger.info(
+                    f"🎵 AudioFileWriter: Started recording to {self.file_path}"
+                )
                 return True
 
             except Exception as e:

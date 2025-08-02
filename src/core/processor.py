@@ -103,7 +103,9 @@ class AudioProcessor:
             return
 
         try:
-            logger.info("🏭 AudioProcessor: Initializing providers for app lifecycle...")
+            logger.info(
+                "🏭 AudioProcessor: Initializing providers for app lifecycle..."
+            )
 
             # Create transcription provider
             logger.info(

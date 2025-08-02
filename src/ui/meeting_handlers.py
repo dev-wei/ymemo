@@ -239,7 +239,9 @@ class MeetingHandler:
 
                     return (
                         refreshed_data,  # Refresh meeting list
-                        gr.update(value="✅ Meeting deleted successfully", visible=True),
+                        gr.update(
+                            value="✅ Meeting deleted successfully", visible=True
+                        ),
                     )
                 error_msg = f"Meeting ID {meeting_id} not found or could not be deleted"
                 logger.error(f"❌ {error_msg}")

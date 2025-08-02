@@ -104,9 +104,9 @@ class DualConnectionErrorHandler:
 
         # Error callbacks
         self.error_callback: Callable[[str, Exception], None] | None = None
-        self.health_change_callback: Callable[
-            [DualConnectionStatus], None
-        ] | None = None
+        self.health_change_callback: Callable[[DualConnectionStatus], None] | None = (
+            None
+        )
         self.fallback_callback: Callable[[FallbackStrategy, str], None] | None = None
 
         # Monitoring
@@ -377,7 +377,9 @@ class DualConnectionErrorHandler:
 
     def _log_health_summary(self) -> None:
         """Log periodic health summary."""
-        logger.info(f"🔍 Connection Health Summary (uptime: {self.status.uptime:.0f}s):")
+        logger.info(
+            f"🔍 Connection Health Summary (uptime: {self.status.uptime:.0f}s):"
+        )
         logger.info(
             f"   🎚️  Left Channel: {self.status.left_health.value} "
             f"({self.left_metrics.results_received} results, {self.left_metrics.consecutive_failures} failures)"

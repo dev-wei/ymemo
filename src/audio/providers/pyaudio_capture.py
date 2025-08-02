@@ -177,7 +177,9 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
                 device_id if device_id is not None else self.default_device_index
             )
 
-            logger.info(f"🎤 PyAudio: Initializing capture on device_id={target_device}")
+            logger.info(
+                f"🎤 PyAudio: Initializing capture on device_id={target_device}"
+            )
 
             # Note: Audio config should already be optimized by AudioProcessor
             logger.debug(
@@ -363,7 +365,9 @@ class PyAudioCaptureProvider(AudioCaptureProvider):
 
                 except Exception as e:
                     if not self._stop_event.is_set():
-                        logger.error(f"❌ PyAudio Thread: Error reading audio data: {e}")
+                        logger.error(
+                            f"❌ PyAudio Thread: Error reading audio data: {e}"
+                        )
                     else:
                         logger.info(
                             "🛑 PyAudio Thread: Exception during read after stop event - expected behavior"

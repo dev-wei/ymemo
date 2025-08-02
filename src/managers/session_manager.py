@@ -184,7 +184,9 @@ class AudioSessionManager:
                     self.active_partial_results[result.utterance_id] = (
                         len(self.current_transcriptions) - 1
                     )
-                    logger.info(f"📝 Added new partial result for {result.utterance_id}")
+                    logger.info(
+                        f"📝 Added new partial result for {result.utterance_id}"
+                    )
             else:
                 # Final result or no utterance tracking
                 if (

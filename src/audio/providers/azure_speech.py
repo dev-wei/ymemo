@@ -359,7 +359,9 @@ class AzureSpeechProvider(TranscriptionProvider):
                 logger.info("🛑 Azure Speech: Transcription generator cancelled")
                 break
             except Exception as e:
-                logger.error(f"❌ Azure Speech: Error getting transcription result: {e}")
+                logger.error(
+                    f"❌ Azure Speech: Error getting transcription result: {e}"
+                )
                 break
 
     async def stop_stream(self) -> None:

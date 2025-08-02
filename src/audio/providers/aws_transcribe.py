@@ -387,7 +387,9 @@ class AWSTranscribeHandler(TranscriptResultStreamHandler):
                             except Exception as e:
                                 logger.info(f"      - {attr}: <error accessing: {e}>")
                 else:
-                    logger.warning("   ❌ Transcript event has no transcript attribute!")
+                    logger.warning(
+                        "   ❌ Transcript event has no transcript attribute!"
+                    )
 
                 # Critical warning if too many consecutive empty results
                 if self._empty_result_count > 200:
@@ -692,9 +694,7 @@ class AWSTranscribeProvider(TranscriptionProvider):
             logger.debug("🔧 AWS Dual Connection: Components already initialized")
             return
 
-        logger.info(
-            "🏗️ AWS Dual Connection: Initializing dual connection components..."
-        )
+        logger.info("🏗️ AWS Dual Connection: Initializing dual connection components...")
 
         # Create channel splitter for stereo audio processing with optional audio saving
         enable_saving = getattr(self, "dual_save_split_audio", False)
@@ -1555,13 +1555,17 @@ class AWSTranscribeProvider(TranscriptionProvider):
         try:
             # Create boto3 session with profile if specified
             if self.profile_name:
-                logger.info(f"🔑 AWS Transcribe: Using AWS profile: {self.profile_name}")
+                logger.info(
+                    f"🔑 AWS Transcribe: Using AWS profile: {self.profile_name}"
+                )
                 boto3.Session(profile_name=self.profile_name)
             else:
                 logger.info("🔑 AWS Transcribe: Using default AWS credentials")
                 boto3.Session()
 
-            logger.info(f"🚀 Initializing AWS Transcribe client (region: {self.region})")
+            logger.info(
+                f"🚀 Initializing AWS Transcribe client (region: {self.region})"
+            )
             self.client = TranscribeStreamingClient(region=self.region)
 
             logger.info(
@@ -1584,9 +1588,9 @@ class AWSTranscribeProvider(TranscriptionProvider):
             elif audio_config.channels == 2 and self.enable_channel_identification:
                 # Dual-channel input - enable speaker separation via AWS channel identification
                 stream_params["enable_channel_identification"] = True
-                stream_params[
-                    "number_of_channels"
-                ] = audio_config.channels  # Required for channel identification
+                stream_params["number_of_channels"] = (
+                    audio_config.channels
+                )  # Required for channel identification
 
                 # Add optimization parameters for dual-channel processing
                 self._add_dual_channel_optimizations(stream_params)
@@ -2113,9 +2117,7 @@ class AWSTranscribeProvider(TranscriptionProvider):
                 components["left_provider"] = None
 
             if test_mode in ["right_only", "full"]:
-                logger.info(
-                    "🏗️ AWS Dual Connection: Creating right channel provider..."
-                )
+                logger.info("🏗️ AWS Dual Connection: Creating right channel provider...")
                 components["right_provider"] = AWSTranscribeProvider(
                     region=self.region,
                     language_code=self.language_code,
@@ -2177,10 +2179,10 @@ class AWSTranscribeProvider(TranscriptionProvider):
             # Log audio saving status
             if self.dual_save_split_audio or self.dual_save_raw_audio:
                 logger.info("🎵 AWS Dual Connection: Audio saving is ENABLED")
-                logger.info(f"   📁 Files will be saved to: {self.dual_audio_save_path}")
                 logger.info(
-                    f"   ⏱️  Maximum duration: {self.dual_audio_save_duration}s"
+                    f"   📁 Files will be saved to: {self.dual_audio_save_path}"
                 )
+                logger.info(f"   ⏱️  Maximum duration: {self.dual_audio_save_duration}s")
                 if self.dual_save_split_audio:
                     logger.info("   ✅ Split audio saving: ENABLED")
                 if self.dual_save_raw_audio:
@@ -2422,7 +2424,9 @@ class AWSTranscribeProvider(TranscriptionProvider):
                     task.cancel()
             raise
         except Exception as e:
-            logger.error(f"❌ AWS Dual Connection: Transcription collection failed: {e}")
+            logger.error(
+                f"❌ AWS Dual Connection: Transcription collection failed: {e}"
+            )
             # Cancel active collection tasks on error
             for task in active_tasks:
                 if not task.done():
@@ -2828,7 +2832,9 @@ class AWSTranscribeProvider(TranscriptionProvider):
             logger.info("🚀 AWS Fallback: Starting dual connection stream...")
             await self._start_dual_connection_stream(audio_config)
 
-            logger.info("✅ AWS Fallback: Successfully switched to dual connection mode")
+            logger.info(
+                "✅ AWS Fallback: Successfully switched to dual connection mode"
+            )
             return True
 
         except Exception as e:
