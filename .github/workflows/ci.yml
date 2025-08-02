@@ -162,6 +162,7 @@ jobs:
             tests/unit/test_session_manager_stop.py \
             tests/config/ \
             --cov=src \
+            --cov-report= \
             --cov-report=xml \
             --cov-report=html \
             --cov-report=term-missing \
@@ -172,7 +173,9 @@ jobs:
 
           # Verify coverage files were created
           echo "📊 Coverage files generated:"
-          ls -la .coverage* coverage.xml htmlcov/ 2>/dev/null || echo "Some coverage files missing"
+          ls -la .coverage* coverage.xml 2>/dev/null || echo "Some coverage files missing"
+          echo "📁 Coverage directories:"
+          ls -la htmlcov/ coverage_reports/ 2>/dev/null || echo "Some coverage directories missing"
 
       - name: "🧪 Run essential tests (cross-platform)"
         if: matrix.test-type == 'essential'
@@ -196,6 +199,7 @@ jobs:
             .coverage
             coverage.xml
             htmlcov/
+            coverage_reports/
           retention-days: 30
 
       # Upload test results for GitHub's test reporting
@@ -311,7 +315,9 @@ jobs:
         run: |
           # Check if coverage data files exist
           echo "📋 Checking for coverage files..."
-          ls -la .coverage* coverage.xml htmlcov/ 2>/dev/null || echo "Coverage files not found"
+          ls -la .coverage* coverage.xml 2>/dev/null || echo "Coverage files not found"
+          echo "📁 Coverage directories:"
+          ls -la htmlcov/ coverage_reports/ 2>/dev/null || echo "Coverage directories not found"
 
           # Generate coverage report and add to step summary
           echo "📊 Generating coverage report..."
