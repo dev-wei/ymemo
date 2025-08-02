@@ -34,7 +34,7 @@ source .venv/bin/activate && python main.py
 **IMPORTANT: Test suite has been fully migrated to pytest-based infrastructure (2024)**
 
 ```bash
-# Run all migrated tests (157 tests, ~8 seconds, hardware-free)
+# Run all migrated tests (261 tests, ~4.3 seconds, hardware-free)
 source .venv/bin/activate && python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ -v
 
 # Run by test category
@@ -42,7 +42,7 @@ source .venv/bin/activate && python -m pytest tests/providers/ -v      # Provide
 source .venv/bin/activate && python -m pytest tests/aws/ -v           # AWS integration (9 tests)  
 source .venv/bin/activate && python -m pytest tests/audio/ -v         # Audio/device tests (39 tests)
 source .venv/bin/activate && python -m pytest tests/unit/ -v          # Core unit tests (29 tests)
-source .venv/bin/activate && python -m pytest tests/config/ -v        # Configuration tests (16 tests)
+source .venv/bin/activate && python -m pytest tests/config/ -v        # Provider configuration tests (88 tests)
 
 # Run with coverage
 source .venv/bin/activate && python -m pytest tests/providers/ tests/aws/ tests/audio/ tests/unit/test_enhanced_session_manager.py tests/unit/test_session_manager_stop.py tests/config/ --cov=src --cov-report=html
@@ -73,11 +73,13 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 - `AudioSessionManager` - Singleton that manages recording sessions and UI callbacks
 - `AudioProcessorFactory` - Factory pattern for creating transcription and capture providers
 
-**Provider Pattern:**
+**Provider System Architecture (Refactored 2024):**
 
-- `TranscriptionProvider` - Interface for speech-to-text services (AWS Transcribe, Azure Speech Service)
-- `AudioCaptureProvider` - Interface for audio input sources (PyAudio, File)
-- Providers are swappable via factory configuration and environment variables
+- **Registry Layer**: `ProviderRegistry` - Manages provider configurations and status checking
+- **Service Layer**: `ProviderService` - High-level facade with caching and validation  
+- **Configuration Layer**: `provider_config` - Legacy-compatible API functions
+- **UI Layer**: `provider_handlers` - Gradio UI event handlers and validation
+- **Interfaces**: `TranscriptionProvider` & `AudioCaptureProvider` for speech-to-text and audio input
 
 **UI Architecture:**
 
@@ -95,8 +97,20 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 **Factory Pattern:**
 
 - `AudioProcessorFactory` creates providers based on string names
-- Supports transcription providers ('aws', 'azure') and capture providers ('pyaudio', 'file')
+- Supports transcription providers ('aws', 'azure', 'whisper', 'google') and capture providers ('pyaudio', 'file')
 - Easy provider swapping via TRANSCRIPTION_PROVIDER environment variable
+
+**Registry Pattern (New 2024):**
+
+- `ProviderRegistry` manages immutable `ProviderConfig` dataclasses
+- Centralized provider registration with feature sets, regions, and status checking
+- Multi-level caching (registry + service) with 30-second TTL for performance
+
+**Service Facade Pattern (New 2024):**
+
+- `ProviderService` provides high-level operations with validation and caching
+- Provider switching validation with language compatibility checks
+- Environment variable management and automatic provider updates
 
 **Provider Pattern:**
 
@@ -185,10 +199,17 @@ print_config_summary()  # Shows current configuration
 
 **MIGRATED PYTEST INFRASTRUCTURE (2024):**
 
-- **157 tests** across 12 core files, **99.4% pass rate** (1 skipped), **~8 seconds execution**
+- **261 tests** across 15 core files, **99.6% pass rate** (1 skipped), **~4.3 seconds execution**
 - **Zero hardware dependencies** - all tests run without PyAudio/AWS/device access
 - **Centralized infrastructure** with base classes, fixtures, and mock factories
 - **CI/CD ready** - tests run consistently in any environment
+
+**PROVIDER SYSTEM REFACTORING (2024):**
+
+- **88 comprehensive new tests** for provider configuration system
+- **Registry Pattern**: Immutable `ProviderConfig` dataclasses with validation
+- **Service Facade**: Caching layer with 30-second TTL for performance
+- **Legacy Compatibility**: All existing APIs preserved, new architecture underneath
 
 **Test Architecture:**
 
@@ -208,7 +229,10 @@ tests/
 ├── unit/         (29 tests) - Core unit tests
 │   ├── test_enhanced_session_manager.py  # Enhanced session management (17 tests)
 │   └── test_session_manager_stop.py      # Stop functionality (12 tests)
-├── config/       (16 tests) - Configuration system tests
+├── config/       (88 tests) - Provider configuration system tests (NEW 2024)
+│   ├── test_provider_registry.py     # Registry & dataclass functionality (34 tests)
+│   ├── test_provider_service.py      # Service facade & caching (33 tests)
+│   ├── test_provider_config.py       # Legacy compatibility & status checks (21 tests)
 │   ├── test_audio_config_validation.py   # Configuration validation (8 tests)
 │   └── test_configuration_parsing.py     # Environment parsing (8 tests)
 ├── base/         - Test infrastructure (BaseTest, BaseIntegrationTest, BaseAsyncTest)
@@ -238,12 +262,14 @@ tests/
 
 **Recent Test Infrastructure Improvements (2024):**
 
+- **Provider System Refactoring**: Added 88 comprehensive tests for new registry/service architecture
 - **Workspace Migration**: Successfully migrated 7 root directory test files to organized pytest structure
 - **Azure Provider Testing**: Complete Azure Speech Service provider test coverage with comprehensive mocking
 - **Dual Provider System**: Full test coverage for AWS dual-channel architecture with channel splitting
 - **Configuration Validation**: Robust testing of environment variable parsing and configuration validation
 - **Device Selection**: Enhanced device selection testing with unicode support and edge case handling
 - **Async Testing**: Proper async test infrastructure with event loop management and resource cleanup
+- **Performance Optimization**: Test execution time reduced from ~8s to ~4.3s with better mocking strategies
 
 **Legacy Test Files (Deprecated):**
 
@@ -262,14 +288,23 @@ src/
 │       ├── azure_speech.py
 │       ├── file_audio_capture.py
 │       └── pyaudio_capture.py
+├── config/                  # Configuration system (REFACTORED 2024)
+│   ├── provider_registry.py    # Provider registry with dataclasses
+│   ├── provider_config.py      # Legacy-compatible configuration API
+│   └── audio_config.py         # Audio configuration classes
 ├── core/                    # Core business logic and interfaces
 │   ├── interfaces.py        # Abstract interfaces for all providers
 │   ├── factory.py           # Provider factory with registries
 │   └── processor.py         # Main audio processing pipeline
+├── exceptions/              # Custom exceptions (NEW 2024)
+│   └── provider_exceptions.py  # Provider-specific exception hierarchy
 ├── managers/                # Management classes
 │   └── session_manager.py   # Singleton session management
+├── services/                # Service layer (NEW 2024)
+│   └── provider_service.py     # High-level provider service facade
 ├── ui/                      # User interface
-│   └── interface.py         # Gradio web interface with responsive design
+│   ├── interface.py         # Gradio web interface with responsive design
+│   └── provider_handlers.py    # Provider selection UI handlers (REFACTORED 2024)
 └── utils/                   # Utility modules
     ├── device_utils.py      # Audio device utilities
     ├── exceptions.py        # Custom exceptions
@@ -284,7 +319,10 @@ src/
 - `src/core/processor.py` - Main audio processing pipeline
 - `src/managers/session_manager.py` - Singleton session management
 - `src/ui/interface.py` - Gradio web interface with responsive design
-- `config/audio_config.py` - System configuration classes
+- `src/config/audio_config.py` - Audio system configuration classes
+- `src/config/provider_registry.py` - Provider registry with dataclasses (NEW 2024)
+- `src/services/provider_service.py` - High-level provider service facade (NEW 2024)
+- `src/ui/provider_handlers.py` - Provider selection UI handlers (REFACTORED 2024)
 
 ## Threading and Async
 
