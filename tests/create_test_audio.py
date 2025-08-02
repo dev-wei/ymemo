@@ -61,7 +61,7 @@ def create_test_audio():
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(audio_int16.tobytes())
 
-    print(f"✅ Created test audio file: {wav_path}")
+    print(f"Created test audio file: {wav_path}")
     print(f"   - Duration: {duration} seconds")
     print(f"   - Sample rate: {sample_rate} Hz")
     print("   - Channels: 1 (mono)")
@@ -73,10 +73,10 @@ def create_test_audio():
 if __name__ == "__main__":
     try:
         wav_path = create_test_audio()
-        print("\n🎉 Test audio file created successfully!")
-        print(f"📁 Path: {wav_path}")
+        print("\nTest audio file created successfully!")
+        print(f"Path: {wav_path}")
     except Exception as e:
-        print(f"❌ Failed to create test audio: {e}")
+        print(f"Failed to create test audio: {e}")
         import traceback
 
         traceback.print_exc()
