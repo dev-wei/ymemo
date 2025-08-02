@@ -4,6 +4,7 @@ import logging
 
 import gradio as gr
 
+from config.audio_config import get_audio_quality_choices, get_default_audio_quality
 from src.config.language_config import get_default_language, get_language_choices
 from src.config.provider_config import (
     get_current_provider_from_env,
@@ -13,6 +14,10 @@ from src.config.provider_config import (
 from src.managers.session_manager import get_audio_session
 from src.utils.status_manager import status_manager
 
+from .audio_quality_handlers import (
+    get_current_audio_quality_info_html,
+    handle_audio_quality_change,
+)
 from .button_state_manager import button_state_manager
 from .interface_constants import (
     AVAILABLE_THEMES,
@@ -104,11 +109,17 @@ def create_sidebar():
                 label=FORM_LABELS["theme_selector"],
                 interactive=True,
             )
-            # Audio quality placeholder
-            audio_quality_display = gr.Textbox(
+            # Audio quality selection - now interactive with quality presets
+            audio_quality_dropdown = gr.Dropdown(
                 label=FORM_LABELS["audio_quality"],
-                value=DEFAULT_VALUES["audio_quality"],
-                interactive=False,
+                choices=get_audio_quality_choices(),
+                value=get_default_audio_quality(),
+                interactive=True,
+            )
+            # Audio quality information display
+            audio_quality_info_display = gr.HTML(
+                value=get_current_audio_quality_info_html(),
+                label="Audio Quality Details",
             )
             # Language selection - now interactive with full language support
             language_dropdown = gr.Dropdown(
@@ -167,7 +178,8 @@ def create_sidebar():
     return (
         sidebar,
         theme_dropdown,
-        audio_quality_display,
+        audio_quality_dropdown,
+        audio_quality_info_display,
         language_dropdown,
         language_info_display,
         provider_dropdown,
@@ -358,7 +370,8 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
         (
             sidebar,
             sidebar_theme_dropdown,
-            sidebar_audio_quality,
+            sidebar_audio_quality_dropdown,
+            sidebar_audio_quality_info,
             sidebar_language_dropdown,
             sidebar_language_info,
             sidebar_provider_dropdown,
@@ -440,6 +453,13 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             ),
             inputs=[sidebar_provider_dropdown, sidebar_language_dropdown],
             outputs=[status_text, sidebar_provider_info],
+        )
+
+        # Audio quality selection handler
+        sidebar_audio_quality_dropdown.change(
+            fn=lambda quality: handle_audio_quality_change(quality),
+            inputs=[sidebar_audio_quality_dropdown],
+            outputs=[status_text, sidebar_audio_quality_info],
         )
 
         start_btn.click(

@@ -10,6 +10,28 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Audio quality constants
+AUDIO_QUALITY_HIGH = "high"
+AUDIO_QUALITY_AVERAGE = "average"
+SAMPLE_RATE_HIGH = 44100  # CD-quality audio
+SAMPLE_RATE_AVERAGE = 16000  # Speech-optimized
+SAMPLE_RATE_THRESHOLD = 32000  # Threshold for determining quality from custom rates
+
+# Audio quality mappings
+QUALITY_SAMPLE_RATE_MAP = {
+    AUDIO_QUALITY_HIGH: SAMPLE_RATE_HIGH,
+    AUDIO_QUALITY_AVERAGE: SAMPLE_RATE_AVERAGE,
+}
+
+# UI display constants
+QUALITY_DISPLAY_HIGH = "High"
+QUALITY_DISPLAY_AVERAGE = "Average"
+
+QUALITY_DISPLAY_MAP = {
+    AUDIO_QUALITY_HIGH: QUALITY_DISPLAY_HIGH,
+    AUDIO_QUALITY_AVERAGE: QUALITY_DISPLAY_AVERAGE,
+}
+
 
 @dataclass
 class AudioSystemConfig:
@@ -102,10 +124,20 @@ class AudioSystemConfig:
     @classmethod
     def from_env(cls) -> 'AudioSystemConfig':
         """Create configuration from environment variables."""
+        # Handle audio quality presets first, then fall back to sample rate
+        audio_quality = os.getenv('AUDIO_QUALITY', '').lower()
+        sample_rate = QUALITY_SAMPLE_RATE_MAP.get(
+            audio_quality,
+            cls._safe_int(
+                os.getenv('AUDIO_SAMPLE_RATE', str(SAMPLE_RATE_AVERAGE)),
+                SAMPLE_RATE_AVERAGE,
+            ),
+        )
+
         return cls(
             transcription_provider=os.getenv('TRANSCRIPTION_PROVIDER', 'aws'),
             capture_provider=os.getenv('CAPTURE_PROVIDER', 'pyaudio'),
-            sample_rate=cls._safe_int(os.getenv('AUDIO_SAMPLE_RATE', '16000'), 16000),
+            sample_rate=sample_rate,
             channels=cls._safe_int(os.getenv('AUDIO_CHANNELS', '1'), 1),
             chunk_size=cls._safe_int(os.getenv('AUDIO_CHUNK_SIZE', '1024'), 1024),
             audio_format=os.getenv('AUDIO_FORMAT', 'int16'),
@@ -573,6 +605,19 @@ PROVIDER_CONFIGS = {
         'max_latency_ms': 1000,
         'enable_partial_results': False,
     },
+    # Audio quality presets
+    'audio_quality_high': {
+        'sample_rate': 44100,  # CD-quality audio
+        'chunk_size': 1024,
+        'max_latency_ms': 300,
+        'enable_partial_results': True,
+    },
+    'audio_quality_average': {
+        'sample_rate': 16000,  # Speech-optimized
+        'chunk_size': 1024,
+        'max_latency_ms': 300,
+        'enable_partial_results': True,
+    },
 }
 
 
@@ -601,3 +646,56 @@ def get_preset_config(preset_name: str) -> AudioSystemConfig:
             setattr(config, key, value)
 
     return config
+
+
+# Audio quality configuration functions
+def get_audio_quality_choices() -> list[str]:
+    """Get available audio quality choices for UI dropdown."""
+    return [QUALITY_DISPLAY_HIGH, QUALITY_DISPLAY_AVERAGE]
+
+
+def get_default_audio_quality() -> str:
+    """Get default audio quality setting."""
+    return QUALITY_DISPLAY_HIGH
+
+
+def get_current_audio_quality_from_sample_rate(sample_rate: int) -> str:
+    """Get audio quality label from sample rate."""
+    if sample_rate == SAMPLE_RATE_HIGH:
+        return QUALITY_DISPLAY_HIGH
+    elif sample_rate == SAMPLE_RATE_AVERAGE:
+        return QUALITY_DISPLAY_AVERAGE
+    else:
+        # For custom sample rates, determine closest quality
+        return (
+            QUALITY_DISPLAY_HIGH
+            if sample_rate >= SAMPLE_RATE_THRESHOLD
+            else QUALITY_DISPLAY_AVERAGE
+        )
+
+
+def get_sample_rate_from_quality(quality: str) -> int:
+    """Get sample rate from audio quality setting."""
+    quality_lower = quality.lower()
+    return QUALITY_SAMPLE_RATE_MAP.get(quality_lower, SAMPLE_RATE_AVERAGE)
+
+
+def get_current_audio_quality_info() -> dict[str, str]:
+    """Get current audio quality information for UI display."""
+    config = get_config()
+    current_quality = get_current_audio_quality_from_sample_rate(config.sample_rate)
+
+    if current_quality == QUALITY_DISPLAY_HIGH:
+        description = (
+            f"High Quality ({SAMPLE_RATE_HIGH:,} Hz) - CD-quality audio capture"
+        )
+    elif current_quality == QUALITY_DISPLAY_AVERAGE:
+        description = f"Average Quality ({SAMPLE_RATE_AVERAGE:,} Hz) - Speech-optimized"
+    else:
+        description = f"Custom ({config.sample_rate:,} Hz)"
+
+    return {
+        "quality": current_quality,
+        "sample_rate": f"{config.sample_rate:,} Hz",
+        "description": description,
+    }

@@ -144,7 +144,8 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 
 *Audio Settings:*
 
-- `AUDIO_SAMPLE_RATE` - Sample rate in Hz (default: 16000)
+- `AUDIO_QUALITY` - Audio quality preset ('high' for 44,100 Hz CD-quality, 'average' for 16,000 Hz speech-optimized, default: not set)
+- `AUDIO_SAMPLE_RATE` - Sample rate in Hz (default: 16000, overridden by AUDIO_QUALITY if set)
 - `AUDIO_CHANNELS` - Number of audio channels (default: 1)
 - `AUDIO_CHUNK_SIZE` - Audio chunk size (default: 1024)
 - `AUDIO_FORMAT` - Audio format ('int16', 'int24', 'int32', 'float32', default: 'int16')
