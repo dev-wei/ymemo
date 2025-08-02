@@ -23,17 +23,21 @@ from .interface_constants import (
 from .interface_dialog_handlers import combined_update, handle_download_click
 from .interface_handlers import (
     clear_dialog,
-    delete_meeting_by_id_input,
     get_device_choices_and_default,
     handle_copy_event,
     immediate_transcription_update,
     refresh_devices,
-    start_recording,
-    stop_recording,
-    submit_new_meeting,
 )
 from .interface_styles import APP_CSS, APP_JS
 from .interface_utils import load_meetings_data
+from .meeting_handlers import (
+    delete_meeting_by_id_input,
+    submit_new_meeting,
+)
+from .recording_handlers import (
+    start_recording,
+    stop_recording,
+)
 
 logger = logging.getLogger(__name__)
 
