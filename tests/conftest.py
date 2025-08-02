@@ -4,41 +4,38 @@ This file provides centralized pytest fixtures that are available to all test fi
 reducing duplication and ensuring consistent test setup across the suite.
 """
 
-import sys
-import os
-import tempfile
 import asyncio
+import os
+import sys
+import tempfile
 from pathlib import Path
-from typing import Dict, Any, Generator
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.core.interfaces import AudioConfig, TranscriptionResult
-from src.managers.session_manager import AudioSessionManager
 from src.managers.enhanced_session_manager import EnhancedAudioSessionManager
-
-from tests.fixtures.mock_factories import (
-    MockAudioProcessorFactory,
-    MockSessionManagerFactory,
-    MockAudioConfigFactory,
-    MockTranscriptionResultFactory,
-    MockProviderFactory,
-    MockPyAudioFactory
-)
+from src.managers.session_manager import AudioSessionManager
+from tests.config.test_configs import TestAudioConfigs
+from tests.config.test_constants import SampleAudioData
 from tests.fixtures.async_mocks import AsyncIteratorMock
 from tests.fixtures.aws_mocks import AWSMockFactory
-from tests.config.test_configs import TestAudioConfigs, TestTranscriptionConfigs
-from tests.config.test_constants import TestConstants, SampleAudioData
-
+from tests.fixtures.mock_factories import (
+    MockAudioConfigFactory,
+    MockAudioProcessorFactory,
+    MockProviderFactory,
+    MockPyAudioFactory,
+    MockSessionManagerFactory,
+    MockTranscriptionResultFactory,
+)
 
 # ============================================================================
 # Session-scoped fixtures (expensive setup, shared across tests)
 # ============================================================================
+
 
 @pytest.fixture(scope="session")
 def project_root_path():
@@ -51,9 +48,10 @@ def temp_dir():
     """Session-scoped temporary directory for test files."""
     temp_path = tempfile.mkdtemp(prefix="ymemo_tests_")
     yield temp_path
-    
+
     # Cleanup
     import shutil
+
     shutil.rmtree(temp_path, ignore_errors=True)
 
 
@@ -61,21 +59,22 @@ def temp_dir():
 # Function-scoped fixtures (fresh instances for each test)
 # ============================================================================
 
+
 @pytest.fixture
 def reset_singletons():
     """Reset all singleton instances before and after each test."""
     # Reset before test
     singletons = [
-        (AudioSessionManager, '_instance'),
-        (EnhancedAudioSessionManager, '_instance'),
+        (AudioSessionManager, "_instance"),
+        (EnhancedAudioSessionManager, "_instance"),
     ]
-    
+
     for singleton_class, instance_attr in singletons:
         if hasattr(singleton_class, instance_attr):
             setattr(singleton_class, instance_attr, None)
-    
+
     yield
-    
+
     # Reset after test
     for singleton_class, instance_attr in singletons:
         if hasattr(singleton_class, instance_attr):
@@ -85,22 +84,24 @@ def reset_singletons():
 @pytest.fixture
 def temp_file(temp_dir):
     """Create a temporary file for testing."""
-    def _create_temp_file(suffix: str = '.tmp', content: bytes = None) -> str:
+
+    def _create_temp_file(suffix: str = ".tmp", content: bytes = None) -> str:
         fd, temp_path = tempfile.mkstemp(suffix=suffix, dir=temp_dir)
         os.close(fd)
-        
+
         if content:
-            with open(temp_path, 'wb') as f:
+            with open(temp_path, "wb") as f:
                 f.write(content)
-        
+
         return temp_path
-    
+
     return _create_temp_file
 
 
 # ============================================================================
 # Audio Configuration Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def default_audio_config():
@@ -123,6 +124,7 @@ def aws_compatible_audio_config():
 # ============================================================================
 # Mock Factory Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def audio_processor_factory():
@@ -157,6 +159,7 @@ def provider_factory():
 # ============================================================================
 # Common Mock Objects
 # ============================================================================
+
 
 @pytest.fixture
 def mock_audio_processor(audio_processor_factory):
@@ -197,13 +200,14 @@ def mock_aws_provider(provider_factory):
 @pytest.fixture
 def mock_file_provider(provider_factory, temp_file):
     """Mock File audio provider."""
-    test_audio_file = temp_file('.wav', SampleAudioData.SILENCE_100MS)
+    test_audio_file = temp_file(".wav", SampleAudioData.SILENCE_100MS)
     return provider_factory.create_file_provider_mock(test_audio_file)
 
 
 # ============================================================================
 # PyAudio Mock Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_pyaudio():
@@ -214,16 +218,13 @@ def mock_pyaudio():
 @pytest.fixture
 def mock_pyaudio_devices():
     """Standard mock audio device listing."""
-    return {
-        0: "Built-in Microphone",
-        1: "USB Headset", 
-        2: "Bluetooth Headphones"
-    }
+    return {0: "Built-in Microphone", 1: "USB Headset", 2: "Bluetooth Headphones"}
 
 
 # ============================================================================
 # AWS Mock Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def aws_mock_setup():
@@ -247,6 +248,7 @@ def aws_partial_results_setup():
 # Session Manager Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def clean_session_manager(reset_singletons):
     """Fresh AudioSessionManager instance."""
@@ -254,7 +256,7 @@ def clean_session_manager(reset_singletons):
     session_mgr._recording_active = False
     session_mgr.background_thread = None
     session_mgr.background_loop = None
-    
+
     yield session_mgr
 
 
@@ -267,6 +269,7 @@ def enhanced_session_manager(reset_singletons):
 # ============================================================================
 # Audio Data Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def sample_audio_chunk():
@@ -290,6 +293,7 @@ def sine_wave_audio():
 # Transcription Result Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def basic_transcription_result(transcription_result_factory):
     """Basic transcription result."""
@@ -308,7 +312,7 @@ def transcription_sequence(transcription_result_factory):
     return transcription_result_factory.create_sequence(
         utterance_id="test_utterance",
         texts=["Hello", "Hello there", "Hello there how"],
-        final_text="Hello there how are you?"
+        final_text="Hello there how are you?",
     )
 
 
@@ -316,17 +320,18 @@ def transcription_sequence(transcription_result_factory):
 # Environment and Configuration Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def test_environment():
     """Patch environment with test configuration."""
     env_vars = {
-        'LOG_LEVEL': 'WARNING',
-        'TRANSCRIPTION_PROVIDER': 'aws',
-        'CAPTURE_PROVIDER': 'pyaudio',
-        'AWS_REGION': 'us-east-1',
-        'AWS_LANGUAGE_CODE': 'en-US'
+        "LOG_LEVEL": "WARNING",
+        "TRANSCRIPTION_PROVIDER": "aws",
+        "CAPTURE_PROVIDER": "pyaudio",
+        "AWS_REGION": "us-east-1",
+        "AWS_LANGUAGE_CODE": "en-US",
     }
-    
+
     with patch.dict(os.environ, env_vars):
         yield env_vars
 
@@ -335,13 +340,13 @@ def test_environment():
 def debug_environment():
     """Patch environment with debug configuration."""
     env_vars = {
-        'LOG_LEVEL': 'DEBUG',
-        'TRANSCRIPTION_PROVIDER': 'aws',
-        'CAPTURE_PROVIDER': 'file',
-        'AWS_REGION': 'us-east-1',
-        'AWS_LANGUAGE_CODE': 'en-US'
+        "LOG_LEVEL": "DEBUG",
+        "TRANSCRIPTION_PROVIDER": "aws",
+        "CAPTURE_PROVIDER": "file",
+        "AWS_REGION": "us-east-1",
+        "AWS_LANGUAGE_CODE": "en-US",
     }
-    
+
     with patch.dict(os.environ, env_vars):
         yield env_vars
 
@@ -349,6 +354,7 @@ def debug_environment():
 # ============================================================================
 # Async Test Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def event_loop():
@@ -361,7 +367,7 @@ def event_loop():
 @pytest.fixture
 def async_audio_stream():
     """Mock async audio stream."""
-    chunks = [b'\x00' * 1024 for _ in range(5)]
+    chunks = [b"\x00" * 1024 for _ in range(5)]
     return AsyncIteratorMock(chunks)
 
 
@@ -375,14 +381,15 @@ def async_transcription_stream(transcription_sequence):
 # Performance Test Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def performance_thresholds():
     """Performance thresholds for testing."""
     return {
-        'startup_time': 1.0,
-        'shutdown_time': 3.0,
-        'memory_usage': 150 * 1024 * 1024,  # 150MB
-        'response_time': 0.1
+        "startup_time": 1.0,
+        "shutdown_time": 3.0,
+        "memory_usage": 150 * 1024 * 1024,  # 150MB
+        "response_time": 0.1,
     }
 
 
@@ -390,13 +397,14 @@ def performance_thresholds():
 # Parametrized Fixtures
 # ============================================================================
 
-@pytest.fixture(params=['aws', 'mock'])
+
+@pytest.fixture(params=["aws", "mock"])
 def transcription_provider_type(request):
     """Parametrized transcription provider types."""
     return request.param
 
 
-@pytest.fixture(params=['pyaudio', 'file'])
+@pytest.fixture(params=["pyaudio", "file"])
 def capture_provider_type(request):
     """Parametrized capture provider types."""
     return request.param
@@ -418,11 +426,16 @@ def channel_count(request):
 # Pytest Configuration
 # ============================================================================
 
+
 def pytest_configure(config):
     """Configure pytest with custom markers."""
     config.addinivalue_line("markers", "unit: fast unit tests")
-    config.addinivalue_line("markers", "integration: integration tests with multiple components")
-    config.addinivalue_line("markers", "performance: performance and resource usage tests")
+    config.addinivalue_line(
+        "markers", "integration: integration tests with multiple components"
+    )
+    config.addinivalue_line(
+        "markers", "performance: performance and resource usage tests"
+    )
     config.addinivalue_line("markers", "slow: tests that take longer than 1 second")
     config.addinivalue_line("markers", "aws: tests that require AWS mocking")
     config.addinivalue_line("markers", "pyaudio: tests that require PyAudio mocking")
@@ -435,15 +448,15 @@ def pytest_collection_modifyitems(config, items):
         # Mark slow tests
         if "slow" in item.name.lower() or "performance" in item.name.lower():
             item.add_marker(pytest.mark.slow)
-        
+
         # Mark AWS tests
         if "aws" in item.name.lower() or "transcribe" in item.name.lower():
             item.add_marker(pytest.mark.aws)
-        
+
         # Mark PyAudio tests
         if "pyaudio" in item.name.lower() or "audio_device" in item.name.lower():
             item.add_marker(pytest.mark.pyaudio)
-        
+
         # Mark tests by directory
         if "integration" in str(item.fspath):
             item.add_marker(pytest.mark.integration)
@@ -457,20 +470,21 @@ def pytest_collection_modifyitems(config, items):
 # Logging Configuration for Tests
 # ============================================================================
 
+
 @pytest.fixture(autouse=True)
 def configure_logging():
     """Configure logging for all tests."""
     import logging
-    
+
     # Set test-appropriate log level
-    log_level = os.getenv('TEST_LOG_LEVEL', 'WARNING')
+    log_level = os.getenv("TEST_LOG_LEVEL", "WARNING")
     logging.basicConfig(
         level=getattr(logging, log_level),
-        format='%(name)s - %(levelname)s - %(message)s',
-        force=True
+        format="%(name)s - %(levelname)s - %(message)s",
+        force=True,
     )
-    
+
     # Suppress noisy loggers
-    logging.getLogger('boto3').setLevel(logging.ERROR)
-    logging.getLogger('botocore').setLevel(logging.ERROR)
-    logging.getLogger('urllib3').setLevel(logging.ERROR)
+    logging.getLogger("boto3").setLevel(logging.ERROR)
+    logging.getLogger("botocore").setLevel(logging.ERROR)
+    logging.getLogger("urllib3").setLevel(logging.ERROR)

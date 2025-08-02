@@ -24,6 +24,7 @@ python main.py
 ## Key Commands
 
 ### Running the Application
+
 ```bash
 source .venv/bin/activate && python main.py
 ```
@@ -51,11 +52,13 @@ source .venv/bin/activate && python tests/test_core_functionality.py
 ```
 
 ### Create Test Audio File
+
 ```bash
 source .venv/bin/activate && python tests/create_test_audio.py
 ```
 
 ### Test Azure Speech Provider
+
 ```bash
 source .venv/bin/activate && python test_azure_speech_provider.py
 ```
@@ -65,16 +68,19 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 ### Core Components
 
 **Audio Processing Pipeline:**
+
 - `AudioProcessor` - Main coordinator that orchestrates audio capture and transcription
 - `AudioSessionManager` - Singleton that manages recording sessions and UI callbacks
 - `AudioProcessorFactory` - Factory pattern for creating transcription and capture providers
 
 **Provider Pattern:**
+
 - `TranscriptionProvider` - Interface for speech-to-text services (AWS Transcribe, Azure Speech Service)
 - `AudioCaptureProvider` - Interface for audio input sources (PyAudio, File)
 - Providers are swappable via factory configuration and environment variables
 
 **UI Architecture:**
+
 - `src/ui/interface.py` - Gradio-based responsive web interface
 - Uses Timer component for real-time updates instead of deprecated polling
 - Responsive design with mobile-friendly stacking layout
@@ -82,21 +88,25 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 ### Key Design Patterns
 
 **Singleton Pattern:**
+
 - `AudioSessionManager` ensures single recording session
 - Thread-safe with proper locking mechanisms
 
 **Factory Pattern:**
+
 - `AudioProcessorFactory` creates providers based on string names
 - Supports transcription providers ('aws', 'azure') and capture providers ('pyaudio', 'file')
 - Easy provider swapping via TRANSCRIPTION_PROVIDER environment variable
 
 **Provider Pattern:**
+
 - Abstract interfaces in `interfaces.py` allow swapping implementations
 - `FileAudioCaptureProvider` for testing without microphone hardware
 - `AWSTranscribeProvider` for AWS real-time speech recognition with speaker diarization
 - `AzureSpeechProvider` for Azure Speech Service with speaker diarization support
 
 **Smart Partial Results:**
+
 - Tracks `utterance_id` and `sequence_number` to update partial results in-place
 - Prevents duplicate entries in Live Dialog panel
 - Configurable timeout for treating partial results as final
@@ -104,6 +114,7 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 ## Configuration
 
 **Centralized Configuration System:**
+
 - All configuration is managed through `config/audio_config.py`
 - Configuration is loaded from environment variables with sensible defaults
 - Automatic validation with helpful error messages
@@ -112,47 +123,56 @@ source .venv/bin/activate && python test_azure_speech_provider.py
 **Key Environment Variables:**
 
 *Provider Selection:*
+
 - `TRANSCRIPTION_PROVIDER` - Choose transcription provider ('aws', 'azure', 'whisper', 'google', default: 'aws')
   - `aws` provider now intelligently switches between single and dual connections automatically
 - `CAPTURE_PROVIDER` - Choose audio capture provider ('pyaudio', 'file', default: 'pyaudio')
 
 *Audio Settings:*
+
 - `AUDIO_SAMPLE_RATE` - Sample rate in Hz (default: 16000)
 - `AUDIO_CHANNELS` - Number of audio channels (default: 1)
 - `AUDIO_CHUNK_SIZE` - Audio chunk size (default: 1024)
 - `AUDIO_FORMAT` - Audio format ('int16', 'int24', 'int32', 'float32', default: 'int16')
 
 *AWS Configuration:*
+
 - `AWS_REGION` - AWS region (default: 'us-east-1')
 - `AWS_LANGUAGE_CODE` - Language code (default: 'en-US')
 - `AWS_MAX_SPEAKERS` - Maximum speakers for diarization (default: 10)
 - `ENABLE_SPEAKER_DIARIZATION` - Enable speaker identification (true/false)
 
 *AWS Connection Strategy:*
+
 - `AWS_CONNECTION_STRATEGY` - Connection mode ('auto', 'single', 'dual', default: 'auto')
 - `AWS_DUAL_FALLBACK_ENABLED` - Enable fallback to dual connections (true/false, default: true)  
 - `AWS_CHANNEL_BALANCE_THRESHOLD` - Channel imbalance threshold for fallback (0.0-1.0, default: 0.3)
 
 *Performance Settings:*
+
 - `MAX_LATENCY_MS` - Maximum latency in milliseconds (default: 300)
 - `ENABLE_PARTIAL_RESULTS` - Enable partial results (default: true)
 - `PARTIAL_RESULT_HANDLING` - How to handle partials ('replace', 'append', 'final_only', default: 'replace')
 - `CONFIDENCE_THRESHOLD` - Minimum confidence threshold (default: 0.0)
 
 *Other Settings:*
+
 - `LOG_LEVEL` - Set logging level (DEBUG, INFO, WARNING, ERROR)
 
 **Configuration Debugging:**
+
 ```python
 from config.audio_config import print_config_summary
 print_config_summary()  # Shows current configuration
 ```
 
 **AWS Setup:**
+
 - Requires AWS credentials configured (via ~/.aws/credentials or environment)
 - Uses centralized configuration for region and language settings
 
 **Azure Speech Service Configuration:**
+
 - `AZURE_SPEECH_KEY` - Azure Speech Service API key (required)
 - `AZURE_SPEECH_REGION` - Azure region (default: 'eastus')
 - `AZURE_SPEECH_LANGUAGE` - Language code (default: 'en-US')
@@ -164,12 +184,14 @@ print_config_summary()  # Shows current configuration
 ## Testing Strategy
 
 **MIGRATED PYTEST INFRASTRUCTURE (2024):**
+
 - **157 tests** across 12 core files, **99.4% pass rate** (1 skipped), **~8 seconds execution**
 - **Zero hardware dependencies** - all tests run without PyAudio/AWS/device access
 - **Centralized infrastructure** with base classes, fixtures, and mock factories
 - **CI/CD ready** - tests run consistently in any environment
 
 **Test Architecture:**
+
 ```
 tests/
 ├── providers/     (64 tests) - Provider functionality tests
@@ -195,23 +217,27 @@ tests/
 ```
 
 **Key Test Principles:**
+
 - **Hardware Independence**: All PyAudio calls mocked, no AWS credentials needed, no device access
 - **Consistent Patterns**: All tests inherit from base classes with standard fixtures
 - **Comprehensive Mocking**: Centralized mock factories for AudioProcessor, Providers, AWS services
 - **Performance Focus**: Fast execution through effective mocking and parallel-safe design
 
 **Base Test Classes:**
+
 - `BaseTest` - Unit tests with singleton cleanup and mock factory access
 - `BaseIntegrationTest` - Integration tests with extended timeout handling  
 - `BaseAsyncTest` - Async tests with proper event loop management
 
 **Mock Strategy:**
+
 - `MockAudioProcessorFactory` - Standardized AudioProcessor mocks
 - `MockProviderFactory` - Provider mocks with proper interface compliance
 - `MockSessionManagerFactory` - Session manager mocks with state management
 - AWS mocking patterns for transcription without actual service calls
 
 **Recent Test Infrastructure Improvements (2024):**
+
 - **Workspace Migration**: Successfully migrated 7 root directory test files to organized pytest structure
 - **Azure Provider Testing**: Complete Azure Speech Service provider test coverage with comprehensive mocking
 - **Dual Provider System**: Full test coverage for AWS dual-channel architecture with channel splitting
@@ -220,6 +246,7 @@ tests/
 - **Async Testing**: Proper async test infrastructure with event loop management and resource cleanup
 
 **Legacy Test Files (Deprecated):**
+
 - Use migrated pytest versions instead of legacy unittest files
 - `test_core_functionality.py` - Use `tests/unit/` instead
 - `test_file_audio_capture.py` - Use `tests/audio/test_device_selection.py` instead
@@ -262,11 +289,13 @@ src/
 ## Threading and Async
 
 **Threading Model:**
+
 - UI runs in main thread
 - Audio processing runs in background thread with separate event loop
 - `threading.Event` used for cross-thread signaling (not complex asyncio patterns)
 
 **Critical: Stop Recording Implementation:**
+
 - Uses simple `threading.Event` signaling rather than complex asyncio cross-thread operations
 - Avoids "different event loop" errors by keeping asyncio operations within single thread
 - Background thread joins with reasonable timeout (2.0 seconds)
@@ -274,11 +303,13 @@ src/
 ## AWS Transcribe Integration
 
 **Streaming Configuration:**
+
 - Uses `amazon-transcribe` library for real-time streaming
 - Partial results enabled by default for responsive UI
 - Smart partial result handling prevents duplicate entries
 
 **Partial Result Handling:**
+
 - Results grouped by `utterance_id` and ordered by `sequence_number`
 - Partial results replace previous partials for same utterance
 - Final results replace all partials for that utterance
@@ -286,17 +317,20 @@ src/
 ## Azure Speech Service Integration
 
 **Provider Swapping:**
+
 - Set `TRANSCRIPTION_PROVIDER=azure` to use Azure instead of AWS
 - Seamless backend switching without code changes
 - Both providers implement the same `TranscriptionProvider` interface
 
 **Azure SDK Integration:**
+
 - Uses `azure-cognitiveservices-speech` SDK for real-time streaming
 - Event-driven architecture bridging Azure callbacks to async/await
 - Push audio stream for continuous recognition
 - Speaker diarization with configurable speaker limits
 
 **Azure-Specific Features:**
+
 - Real-time speech recognition with partial and final results
 - Speaker identification in format "Speaker 1", "Speaker 2", etc.
 - Connection health monitoring and automatic retry logic
@@ -305,23 +339,28 @@ src/
 ## Common Issues
 
 **Event Loop Conflicts:**
+
 - Always use `threading.Event` for stop signaling
 - Avoid `asyncio.run_coroutine_threadsafe` with different event loops
 
 **AWS Timeout in Tests:**
+
 - Never test with live AWS streaming in automation
 - Use file-based audio capture for reliable testing
 
 **Mobile Responsiveness:**
+
 - CSS media queries stack Live Dialog and Audio Controls vertically on narrow screens
 - Use `!important` declarations for mobile layout overrides
 - Meeting list layout restructured for proper vertical stacking of delete controls
 
 **UI Layout Issues:**
+
 - Meeting list delete controls positioned using column-based layout to prevent horizontal wrapping
 - Dataframe and delete controls separated into distinct containers with proper height constraints
 - Responsive design ensures consistent layout across all screen sizes
 
 **Application Execution:**
+
 - Never run python main.py, because it will hang as it is a website
-- Use uv pip when you can 
+- Use uv pip when you can

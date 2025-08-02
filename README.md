@@ -37,6 +37,7 @@ YMemo is a sophisticated, open-source meeting transcription application that tra
 <td>
 
 ### 💼 Business Teams
+
 - **Meeting Documentation**: Automatic accurate records
 - **Action Item Tracking**: Never miss follow-ups
 - **Remote Collaboration**: Async meeting reviews
@@ -45,6 +46,7 @@ YMemo is a sophisticated, open-source meeting transcription application that tra
 <td>
 
 ### 👨‍💻 Development Teams
+
 - **Technical Discussions**: Complex terminology handled
 - **Code Review Sessions**: Detailed technical records
 - **Architecture Planning**: Long-term decision tracking
@@ -55,6 +57,7 @@ YMemo is a sophisticated, open-source meeting transcription application that tra
 <td>
 
 ### 🏢 Enterprise Organizations
+
 - **Compliance Requirements**: Audit-ready transcriptions
 - **Training Documentation**: Knowledge preservation
 - **Client Meetings**: Professional meeting records
@@ -63,6 +66,7 @@ YMemo is a sophisticated, open-source meeting transcription application that tra
 <td>
 
 ### 🎓 Educational Institutions
+
 - **Lecture Transcription**: Accessible learning materials
 - **Research Interviews**: Accurate data collection
 - **Student Support**: Assistive technology
@@ -78,6 +82,7 @@ YMemo is a sophisticated, open-source meeting transcription application that tra
 Get YMemo running in under 3 minutes:
 
 ### 1. Clone & Setup
+
 ```bash
 git clone git@github.com:dev-wei/ymemo.git
 cd ymemo
@@ -91,9 +96,11 @@ pip install -r requirements.txt
 ```
 
 ### 2. Configure Your Provider
+
 Choose your preferred transcription service:
 
 **Option A: AWS Transcribe (Recommended)**
+
 ```bash
 # Configure AWS credentials
 aws configure
@@ -104,6 +111,7 @@ export AWS_REGION=us-east-1
 ```
 
 **Option B: Azure Speech Service**
+
 ```bash
 # Set Azure credentials
 export AZURE_SPEECH_KEY=your_key
@@ -112,6 +120,7 @@ export TRANSCRIPTION_PROVIDER=azure
 ```
 
 ### 3. Launch the Application
+
 ```bash
 python main.py
 ```
@@ -139,6 +148,7 @@ graph TD
 ```
 
 ### 🔧 Technical Excellence
+
 - **157 Comprehensive Tests** with 99.4% pass rate
 - **Zero Hardware Dependencies** in test suite
 - **Async/Await Architecture** for optimal performance
@@ -199,12 +209,14 @@ export AZURE_SPEECH_TIMEOUT=30               # Connection timeout
 YMemo features a clean, professional interface built with Gradio:
 
 ### Main Dashboard
+
 - **Live Audio Controls**: Start/stop recording with visual feedback
 - **Real-Time Transcription**: Text appears as speakers talk
 - **Speaker Identification**: Color-coded speaker labels
 - **Meeting Management**: Save, organize, and export transcriptions
 
 ### Key UI Features
+
 - 📱 **Responsive Design**: Works on desktop, tablet, and mobile
 - 🎨 **Multiple Themes**: Professional, dark, and light modes
 - 🔄 **Real-Time Updates**: No page refresh needed
@@ -217,6 +229,7 @@ YMemo features a clean, professional interface built with Gradio:
 YMemo is built with enterprise-grade quality standards:
 
 ### Testing Coverage
+
 ```bash
 # Run complete test suite
 source .venv/bin/activate
@@ -227,12 +240,14 @@ python -m pytest tests/ --cov=src --cov-report=html
 ```
 
 **Test Statistics:**
+
 - ✅ **157 Tests** across all components
 - ✅ **99.4% Pass Rate** (1 intentionally skipped)
 - ✅ **~8 Second Runtime** for complete suite
 - ✅ **Zero Hardware Dependencies** - runs anywhere
 
 ### Test Categories
+
 - **Provider Tests (64)**: Transcription service integration
 - **Audio Tests (39)**: Device and processing validation
 - **AWS Integration (9)**: Cloud service connectivity
@@ -244,6 +259,7 @@ python -m pytest tests/ --cov=src --cov-report=html
 ## 🔧 Development
 
 ### Project Structure
+
 ```
 ymemo/
 ├── src/
@@ -258,9 +274,11 @@ ymemo/
 ```
 
 ### Contributing
+
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
 ### Development Setup
+
 ```bash
 # Install development dependencies
 pip install -r requirements-dev.txt
@@ -291,6 +309,7 @@ YMemo is optimized for production use:
 | **Concurrent Sessions** | Supports multiple simultaneous meetings |
 
 ### Benchmark Results
+
 - **AWS Transcribe**: 96% accuracy on clear audio
 - **Azure Speech**: 94% accuracy with speaker diarization
 - **Dual-Channel Mode**: 3% accuracy improvement on stereo input
@@ -323,12 +342,14 @@ YMemo is designed with privacy in mind:
 ## 🤝 Support & Community
 
 ### Getting Help
+
 - 📖 [**Documentation**](docs/) - Comprehensive guides
 - 🐛 [**Issues**](https://github.com/dev-wei/ymemo/issues) - Bug reports and feature requests
 - 💬 [**Discussions**](https://github.com/dev-wei/ymemo/discussions) - Community support
 - 📧 [**Email Support**](mailto:support@ymemo.dev) - Direct assistance
 
 ### Contributing
+
 - 🔧 [**Contributing Guide**](CONTRIBUTING.md) - How to contribute
 - 🎯 [**Good First Issues**](https://github.com/dev-wei/ymemo/labels/good%20first%20issue) - Start here
 - 📝 [**Code Style Guide**](docs/code-style.md) - Development standards

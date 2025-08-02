@@ -3,7 +3,7 @@
 # Main CSS styles for the Voice Meeting App
 APP_CSS = """
     .gradio-container {
-        max-width: 1400px !important; 
+        max-width: 1400px !important;
         margin-left: auto !important;
         margin-right: auto !important;
         padding: 20px !important;
@@ -12,8 +12,8 @@ APP_CSS = """
         text-align: center;
         margin-bottom: 20px;
     }
-    
-    
+
+
     /* Desktop Layout - Default */
     .meeting-list-container {
         margin-bottom: 20px !important;
@@ -39,7 +39,7 @@ APP_CSS = """
         overflow-y: auto !important;
         padding-left: 10px !important;
     }
-    
+
     /* Delete controls section styling */
     .delete-controls-section {
         margin-top: 15px !important;
@@ -47,7 +47,7 @@ APP_CSS = """
         border-top: 1px solid #e0e0e0 !important;
         width: 100% !important;
     }
-    
+
     /* Mobile/Narrow Screen Layout */
     @media screen and (max-width: 768px) {
         .gradio-container {
@@ -66,15 +66,15 @@ APP_CSS = """
         .control-panel {
             height: 400px !important;
         }
-        
+
         /* Mobile delete controls styling */
         .delete-controls-section {
             margin-top: 10px !important;
             padding-top: 10px !important;
         }
-        
-        
-        
+
+
+
         /* Force vertical stacking with multiple selectors */
         .main-content-row,
         .main-content-row > .gradio-column,
@@ -83,7 +83,7 @@ APP_CSS = """
             flex-direction: column !important;
             width: 100% !important;
         }
-        
+
         /* Target Gradio's generated structure */
         .main-content-row > div:first-child,
         .main-content-row > div:last-child {
@@ -92,13 +92,13 @@ APP_CSS = """
             flex: 1 1 100% !important;
             margin-bottom: 20px !important;
         }
-        
+
         /* Override Gradio's default flex behavior */
         .gradio-row.main-content-row {
             flex-direction: column !important;
             align-items: stretch !important;
         }
-        
+
         /* Force column layout */
         .gradio-column {
             width: 100% !important;
@@ -106,7 +106,7 @@ APP_CSS = """
             flex-basis: 100% !important;
         }
     }
-    
+
     /* Very narrow screens (mobile portrait) */
     @media screen and (max-width: 480px) {
         .gradio-container {
@@ -125,14 +125,14 @@ APP_CSS = """
         .control-panel {
             height: 350px !important;
         }
-        
+
         /* Ensure vertical stacking on very small screens */
         .main-content-row,
         .gradio-row.main-content-row {
             flex-direction: column !important;
             align-items: stretch !important;
         }
-        
+
         .main-content-row > div,
         .main-content-row > .gradio-column {
             width: 100% !important;
@@ -141,17 +141,17 @@ APP_CSS = """
             margin-bottom: 15px !important;
         }
     }
-    
+
     /* Prevent horizontal scrolling issues */
     .gradio-row {
         gap: 1rem !important;
     }
-    
+
     /* Ensure proper box sizing */
     * {
         box-sizing: border-box !important;
     }
-    
+
     /* Additional mobile layout fixes */
     @media screen and (max-width: 768px) {
         /* Force all direct children of main-content-row to be full width */
@@ -159,12 +159,12 @@ APP_CSS = """
             width: 100% !important;
             max-width: 100% !important;
         }
-        
+
         /* Override any inline styles that might prevent stacking */
         .main-content-row [style*="width"] {
             width: 100% !important;
         }
-        
+
         /* Ensure Gradio's column system respects mobile layout */
         .gradio-row.main-content-row > .gradio-column {
             flex: 1 1 100% !important;
@@ -172,7 +172,7 @@ APP_CSS = """
             max-width: 100% !important;
         }
     }
-    
+
     /* Responsive improvements */
     @media screen and (max-width: 768px) {
         h1, h2, h3 {

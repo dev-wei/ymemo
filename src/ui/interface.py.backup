@@ -31,10 +31,10 @@ logger = logging.getLogger(__name__)
 
 def get_button_states(status: AudioStatus) -> dict:
     """Get button configurations based on current recording status.
-    
+
     Args:
         status: Current AudioStatus
-        
+
     Returns:
         Dictionary with button configurations
     """
@@ -48,19 +48,19 @@ def get_button_states(status: AudioStatus) -> dict:
                 "visible": True
             },
             "stop_btn": {
-                "text": BUTTON_TEXT["stop_recording"], 
+                "text": BUTTON_TEXT["stop_recording"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
             "save_btn": {
                 "text": BUTTON_TEXT["save_meeting"],
-                "variant": "secondary", 
+                "variant": "secondary",
                 "interactive": False,
                 "visible": True
             }
         }
-    
+
     elif status in [AudioStatus.INITIALIZING, AudioStatus.CONNECTING]:
         # Starting up
         return {
@@ -72,7 +72,7 @@ def get_button_states(status: AudioStatus) -> dict:
             },
             "stop_btn": {
                 "text": BUTTON_TEXT["stop_recording"],
-                "variant": "secondary", 
+                "variant": "secondary",
                 "interactive": False,
                 "visible": True
             },
@@ -83,7 +83,7 @@ def get_button_states(status: AudioStatus) -> dict:
                 "visible": True
             }
         }
-    
+
     elif status in [AudioStatus.RECORDING, AudioStatus.TRANSCRIBING]:
         # Recording in progress
         return {
@@ -100,13 +100,13 @@ def get_button_states(status: AudioStatus) -> dict:
                 "visible": True
             },
             "save_btn": {
-                "text": BUTTON_TEXT["save_meeting"], 
+                "text": BUTTON_TEXT["save_meeting"],
                 "variant": "secondary",
                 "interactive": False,
                 "visible": True
             }
         }
-    
+
     elif status == AudioStatus.STOPPING:
         # Stop in progress
         return {
@@ -129,7 +129,7 @@ def get_button_states(status: AudioStatus) -> dict:
                 "visible": True
             }
         }
-    
+
     elif status == AudioStatus.STOPPED:
         # Recording just completed - highlight save button
         return {
@@ -152,7 +152,7 @@ def get_button_states(status: AudioStatus) -> dict:
                 "visible": True
             }
         }
-    
+
     elif status == AudioStatus.ERROR:
         # Error occurred - allow restart
         return {
@@ -175,7 +175,7 @@ def get_button_states(status: AudioStatus) -> dict:
                 "visible": True
             }
         }
-    
+
     else:
         # Default fallback
         return {
@@ -202,14 +202,14 @@ def get_button_states(status: AudioStatus) -> dict:
 
 def update_button_states():
     """Update all button states based on current recording status.
-    
+
     Returns:
         Tuple of button updates for (start_btn, stop_btn, save_btn)
     """
     try:
         current_status = status_manager.current_status
         button_configs = get_button_states(current_status)
-        
+
         return (
             gr.update(
                 value=button_configs["start_btn"]["text"],
@@ -273,7 +273,7 @@ def create_dialog_panel():
     """Create the dialog panel with meeting fields and chatbot."""
     with gr.Column(scale=4, elem_classes=["dialog-panel"]):
         gr.Markdown(UI_TEXT["live_dialog_title"])
-        
+
         # Meeting fields
         with gr.Row():
             meeting_name_field = gr.Textbox(
@@ -286,7 +286,7 @@ def create_dialog_panel():
                 value=DEFAULT_VALUES["duration_display"],
                 interactive=False
             )
-        
+
         dialog_output = gr.Chatbot(
             value=[],  # Start with empty dialog
             type="messages",
@@ -294,7 +294,7 @@ def create_dialog_panel():
             placeholder=PLACEHOLDER_TEXT["transcription_dialog"],
             height=UI_DIMENSIONS["dialog_height"]  # Set chatbot height
         )
-        
+
         return meeting_name_field, duration_field, dialog_output
 
 
@@ -303,13 +303,13 @@ def create_dialog_panel():
 
 def create_controls():
     """Create the audio controls panel."""
-    
+
     with gr.Column(scale=2, elem_classes=["control-panel"]):
         gr.Markdown(UI_TEXT["audio_controls_title"])
-        
+
         # Audio device selection
         device_choices, initial_device = get_device_choices_and_default()
-        
+
         device_dropdown = gr.Dropdown(
             label=FORM_LABELS["audio_device"],
             choices=device_choices,
@@ -317,27 +317,27 @@ def create_controls():
             interactive=True,
             allow_custom_value=True
         )
-        
+
         # Device refresh button
         refresh_btn = gr.Button(
-            BUTTON_TEXT["refresh_devices"], 
+            BUTTON_TEXT["refresh_devices"],
             size="sm",
             variant="secondary"
         )
-        
+
         # Recording status
         status_text = gr.Textbox(
             label=FORM_LABELS["status"],
             value=status_manager.get_status_message(),
             interactive=False
         )
-        
+
         # Control buttons - Initialize with proper states
         current_status = status_manager.current_status
         logger.info(f"🔍 Current status: {current_status}")
         initial_button_states = get_button_states(current_status)
         logger.info(f"🔍 Start button interactive: {initial_button_states['start_btn']['interactive']}")
-        
+
         with gr.Row():
             start_btn = gr.Button(
                 initial_button_states["start_btn"]["text"],
@@ -349,14 +349,14 @@ def create_controls():
                 variant=initial_button_states["stop_btn"]["variant"],
                 interactive=initial_button_states["stop_btn"]["interactive"]
             )
-        
+
         # Save meeting button
         save_meeting_btn = gr.Button(
             initial_button_states["save_btn"]["text"],
             variant=initial_button_states["save_btn"]["variant"],
             interactive=initial_button_states["save_btn"]["interactive"]
         )
-        
+
         # Live transcription display
         live_text = gr.Textbox(
             label=FORM_LABELS["live_transcription"],
@@ -365,54 +365,54 @@ def create_controls():
             interactive=False,
             placeholder=PLACEHOLDER_TEXT["live_transcription"]
         )
-        
+
         return device_dropdown, refresh_btn, status_text, start_btn, stop_btn, save_meeting_btn, live_text
 
 
 def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
     """Create the main Gradio interface.
-    
+
     Args:
         theme_name: Name of the theme to use
-        
+
     Returns:
         Gradio Blocks interface
     """
     # Get theme
     theme = THEMES.get(theme_name, THEMES[DEFAULT_THEME])
-    
+
     # Initialize audio devices - function moved to create_controls()
     # Use styles from separate file
     css = APP_CSS
     js_func = APP_JS
 
     with gr.Blocks(
-        title="Voice Meeting App", 
-        theme=theme, 
-        css=css, 
+        title="Voice Meeting App",
+        theme=theme,
+        css=css,
         js=js_func,
     ) as demo:
-        
+
         # Header
         create_header()
 
         # Responsive layout structure
         # Desktop: [Meeting List] [Live Dialog] [Audio Controls]
         # Mobile: [Meeting List - Full Width] then [Live Dialog] [Audio Controls]
-        
+
         # Meeting List - Full width on mobile, partial on desktop
         meeting_list = create_meeting_list()
-        
+
         # Dialog and Controls - Side by side on all screens, but different proportions
         with gr.Row(elem_classes=["main-content-row"]):
             # Center panel - Live Dialog
             meeting_name_field, duration_field, dialog_output = create_dialog_panel()
-            
+
             # Right panel - Audio Controls
             device_dropdown, refresh_btn, status_text, start_btn, stop_btn, save_meeting_btn, live_text = create_controls()
-        
+
         # Save panel components removed during cleanup
-        
+
         # Hidden components for backend data handling (keep for compatibility)
         meeting_name_input = gr.Textbox(
             label="Meeting Name",
@@ -420,14 +420,14 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             value="",
             visible=False
         )
-        
+
         current_date = gr.Textbox(
             label="Date",
             value=datetime.now().strftime("%Y-%m-%d"),
             interactive=False,
             visible=False
         )
-        
+
         transcription_preview = gr.Textbox(
             label="Transcription",
             lines=5,
@@ -436,35 +436,35 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             placeholder="Transcription will appear here...",
             visible=False
         )
-        
+
         duration_display = gr.Textbox(
             label="Duration",
             value="0.0 min",
             interactive=False,
             visible=False
         )
-        
+
         save_status = gr.Textbox(
             label="Status",
             value="",
             interactive=False,
             visible=False
         )
-        
+
         # Get audio session manager
         audio_session = get_audio_session()
-        
+
         # State management for real-time updates
         dialog_state = gr.State([])
-        
+
         def update_dialog_state(current_messages, new_message):
             """Update dialog state with new transcription message."""
             try:
                 logger.debug(f"UI: Updating dialog state with message: {new_message}")
-                
+
                 # Create a copy of current messages
                 updated_messages = current_messages.copy()
-                
+
                 # Handle partial result updates
                 if new_message.get("utterance_id") and new_message.get("is_partial"):
                     # Find existing message with same utterance_id
@@ -473,7 +473,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         if msg.get("utterance_id") == new_message["utterance_id"]:
                             existing_index = i
                             break
-                    
+
                     if existing_index is not None:
                         # Update existing message
                         updated_messages[existing_index] = new_message
@@ -491,7 +491,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                             if msg.get("utterance_id") == new_message["utterance_id"]:
                                 existing_index = i
                                 break
-                        
+
                         if existing_index is not None:
                             updated_messages[existing_index] = new_message
                             logger.debug(f"UI: Finalized message at index {existing_index}")
@@ -502,9 +502,9 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         # No utterance tracking, just append
                         updated_messages.append(new_message)
                         logger.debug(f"UI: Added message without utterance tracking")
-                        
+
                 logger.debug(f"UI: Dialog now has {len(updated_messages)} messages")
-                
+
                 # Convert to Gradio format
                 gradio_messages = []
                 for msg in updated_messages:
@@ -512,31 +512,31 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         "role": "assistant",
                         "content": msg["content"]
                     })
-                
+
                 return updated_messages, gradio_messages
-                
+
             except Exception as e:
                 logger.error(f"Error updating dialog state: {e}")
                 return current_messages, []
-        
+
         # Event handlers moved to interface_handlers.py
-        
+
         # Register callback with session manager
         audio_session.add_transcription_callback(immediate_transcription_update)
-        
+
         # Timer for dialog updates only (not button updates)
         timer = gr.Timer(value=UI_DIMENSIONS["timer_interval"])  # Check for updates every 500ms
-        
+
         # Wire up event handlers
         refresh_btn.click(
             try:
                 logger.info(f"🎤 START RECORDING CLICKED - Device: {device_name}")
                 logger.info(f"🎤 Current state: {current_state}")
-                
+
                 # Preserve existing dialog state instead of clearing
                 preserved_state = current_state if current_state is not None else []
                 logger.info(f"🎤 Preserving {len(preserved_state)} existing messages")
-                
+
                 # Convert preserved state to Gradio format for visual display
                 gradio_messages = []
                 for msg in preserved_state:
@@ -545,7 +545,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         "content": msg["content"]
                     })
                 logger.info(f"🎤 Converted {len(gradio_messages)} messages to Gradio format")
-                
+
                 # Find device index from name
                 devices, _ = get_device_choices_and_default()
                 device_index = -1
@@ -553,7 +553,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                     if name == device_name:
                         device_index = index
                         break
-                
+
                 if device_index == -1:
                     status_manager.set_error(
                         Exception("Device not found"),
@@ -561,7 +561,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                     )
                     start_btn_state, stop_btn_state, save_btn_state = update_button_states()
                     return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
-                
+
                 # Check if already recording
                 if audio_session.is_recording():
                     status_manager.set_error(
@@ -570,15 +570,15 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                     )
                     start_btn_state, stop_btn_state, save_btn_state = update_button_states()
                     return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
-                
+
                 # Start recording using session manager
                 status_manager.set_initializing()
                 start_btn_state, stop_btn_state, save_btn_state = update_button_states()
-                
+
                 config = AUDIO_CONFIG
-                
+
                 status_manager.set_connecting()
-                
+
                 if audio_session.start_recording(device_index, config):
                     status_manager.set_recording()
                 else:
@@ -586,11 +586,11 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         Exception("Failed to start"),
                         "Could not start recording"
                     )
-                
+
                 # Update button states based on final status
                 start_btn_state, stop_btn_state, save_btn_state = update_button_states()
                 return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
-                
+
             except Exception as e:
                 logger.error(f"❌ START RECORDING ERROR: {e}")
                 import traceback
@@ -598,13 +598,13 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                 status_manager.set_error(e, "Failed to start recording")
                 start_btn_state, stop_btn_state, save_btn_state = update_button_states()
                 return status_manager.get_status_message(), preserved_state, gradio_messages, start_btn_state, stop_btn_state, save_btn_state
-        
+
         def stop_recording():
             """Stop recording."""
             try:
                 status_manager.set_stopping()
                 start_btn_state, stop_btn_state, save_btn_state = update_button_states()
-                
+
                 if audio_session.stop_recording():
                     status_manager.set_stopped()
                 else:
@@ -612,16 +612,16 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         Exception("Failed to stop"),
                         "Could not stop recording"
                     )
-                
+
                 # Update button states based on final status
                 start_btn_state, stop_btn_state, save_btn_state = update_button_states()
                 return status_manager.get_status_message(), start_btn_state, stop_btn_state, save_btn_state
-                
+
             except Exception as e:
                 status_manager.set_error(e, "Failed to stop recording")
                 start_btn_state, stop_btn_state, save_btn_state = update_button_states()
                 return status_manager.get_status_message(), start_btn_state, stop_btn_state, save_btn_state
-        
+
         def handle_transcription_update(current_state, message):
             """Handle new transcription message and update dialog state."""
             try:
@@ -631,22 +631,22 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             except Exception as e:
                 logger.error(f"Error handling transcription update: {e}")
                 return current_state, []
-        
+
         # Use a shared update trigger
         update_trigger = gr.State(0)
-        
+
         def immediate_transcription_update(message):
             """Immediately handle transcription update."""
             logger.debug(f"UI: Immediate transcription update: {message}")
             # This will be handled by the session manager directly
             pass
-        
+
         def get_latest_dialog_state():
             """Get the latest dialog state from session manager."""
             try:
                 # Get current transcriptions from session manager
                 current_transcriptions = audio_session.get_current_transcriptions()
-                
+
                 # Convert to Gradio format
                 gradio_messages = []
                 for msg in current_transcriptions:
@@ -654,22 +654,22 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         "role": "assistant",
                         "content": msg["content"]
                     })
-                
+
                 return current_transcriptions, gradio_messages
             except Exception as e:
                 logger.error(f"Error getting dialog state: {e}")
                 return [], []
-        
+
         def conditional_update():
             """Only update if recording is active or there are messages."""
             try:
                 # Get current transcriptions
                 current_transcriptions = audio_session.get_current_transcriptions()
-                
+
                 # If no transcriptions and not recording, return None (no update)
                 if not current_transcriptions and not audio_session.is_recording():
                     return gr.skip(), gr.skip()
-                
+
                 # Convert to Gradio format
                 gradio_messages = []
                 for msg in current_transcriptions:
@@ -677,48 +677,48 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         "role": "assistant",
                         "content": msg["content"]
                     })
-                
+
                 return current_transcriptions, gradio_messages
             except Exception as e:
                 logger.error(f"Error in conditional update: {e}")
                 return gr.skip(), gr.skip()
-        
+
         # Register callback with session manager
         audio_session.add_transcription_callback(immediate_transcription_update)
-        
+
         # Timer for dialog updates only (not button updates)
         timer = gr.Timer(value=UI_DIMENSIONS["timer_interval"])  # Check for updates every 500ms
         refresh_btn.click(
             fn=refresh_devices,
             outputs=[device_dropdown, status_text]
         )
-        
+
         start_btn.click(
             fn=start_recording,
             inputs=[device_dropdown, dialog_state],
             outputs=[status_text, dialog_state, dialog_output, start_btn, stop_btn, save_meeting_btn]
         )
-        
+
         stop_btn.click(
             fn=stop_recording,
             outputs=[status_text, start_btn, stop_btn, save_meeting_btn]
         )
-        
+
         # Timer for dialog updates only (not button updates)
         timer.tick(
             fn=conditional_update,
             outputs=[dialog_state, dialog_output]
         )
-        
+
         # Save panel functionality
         def open_save_panel():
             """Open the save meeting panel with current recording data."""
             try:
                 logger.info("🔓 Save panel button clicked")
-                
+
                 # Get current transcription from session manager
                 current_transcriptions = audio_session.get_current_transcriptions()
-                
+
                 # Combine all transcriptions into one text
                 current_transcription = ""
                 if current_transcriptions:
@@ -726,28 +726,28 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                     for msg in current_transcriptions:
                         transcription_parts.append(msg["content"])
                     current_transcription = "\n".join(transcription_parts)
-                
+
                 # Get session info for duration
                 session_info = audio_session.get_session_info()
                 duration = session_info.get('duration', 0.0)
-                
+
                 # Format duration for display
                 duration_str = f"{duration:.1f} min" if duration > 0 else "0.0 min"
-                
+
                 logger.info(f"✅ Opening save panel with {len(current_transcriptions)} transcriptions")
                 logger.info(f"✅ Transcription preview: {current_transcription[:100]}...")
                 logger.info(f"✅ Duration string: {duration_str}")
-                
+
                 # Generate a meaningful default meeting name
                 from datetime import datetime
                 default_name = f"Meeting {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-                
+
                 # Update hidden form fields for backend processing
                 meeting_name_input.value = default_name
                 current_date.value = datetime.now().strftime("%Y-%m-%d")
                 transcription_preview.value = current_transcription
                 duration_display.value = duration_str
-                
+
                 # Return JavaScript to show panel and populate form
                 return gr.HTML(f"""
                     <script>
@@ -758,7 +758,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         }}, 100);
                     </script>
                 """)
-                
+
             except Exception as e:
                 logger.error(f"❌ Error opening save panel: {e}")
                 import traceback
@@ -770,17 +770,17 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         }}, 100);
                     </script>
                 """)
-        
+
         def save_meeting(meeting_name, transcription, duration_str):
             """Save the meeting to database."""
             try:
                 logger.info(f"💾 Saving meeting: '{meeting_name}', duration: '{duration_str}'")
                 logger.info(f"💾 Transcription length: {len(transcription)} characters")
-                
+
                 # Parse duration from string
                 duration = float(duration_str.replace(" min", "").replace(" sec", ""))
                 logger.info(f"💾 Parsed duration: {duration}")
-                
+
                 # Save to database
                 success, message = save_meeting_to_database(
                     meeting_name=meeting_name,
@@ -788,9 +788,9 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                     transcription=transcription,
                     audio_file_path=None  # TODO: Add audio file path when available
                 )
-                
+
                 logger.info(f"💾 Save result: success={success}, message='{message}'")
-                
+
                 if success:
                     # Close panel and refresh meeting list
                     return (
@@ -816,7 +816,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                             </script>
                         """)
                     )
-                    
+
             except Exception as e:
                 logger.error(f"Error saving meeting: {e}")
                 return (
@@ -829,13 +829,13 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                         </script>
                     """)
                 )
-        
-        
+
+
         # Save panel functionality removed during cleanup
-        
+
         # Create a hidden component for JavaScript callbacks
         js_callback_output = gr.HTML(visible=False)
-        
+
         # Set up JavaScript callback for save action
         def setup_save_callback():
             return gr.HTML("""
@@ -848,17 +848,17 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                             const nameInput = document.querySelector('#meeting-name-input textarea');
                             const transcInput = document.querySelector('#transcription-preview textarea');
                             const durationInput = document.querySelector('#duration-display textarea');
-                            
+
                             if (nameInput) nameInput.value = meetingName;
                             if (transcInput) transcInput.value = transcription;
                             if (durationInput) durationInput.value = duration;
-                            
+
                             saveBtn.click();
                         }
                     };
                 </script>
             """)
-        
+
         # Create hidden save trigger button
         save_trigger_btn = gr.Button("Save", visible=False, elem_id="save-meeting-trigger")
         save_trigger_btn.click(
@@ -866,10 +866,10 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             inputs=[meeting_name_input, transcription_preview, duration_display],
             outputs=[meeting_list, js_callback_output]
         )
-        
+
         # Setup callback removed during cleanup
-        
+
         # Note: Removed automatic button updates to prevent interference with clicks
         # Buttons are updated manually in the event handlers when needed
-    
+
     return demo

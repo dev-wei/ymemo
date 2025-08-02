@@ -1,0 +1,212 @@
+# YMemo Audio Processing Pipeline Configuration
+# Modern Python project configuration following PEP 518/621
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ymemo"
+version = "1.0.0"
+description = "Real-time voice meeting transcription with AWS Transcribe and Azure Speech Service"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "YMemo Team", email = "team@ymemo.dev"},
+]
+maintainers = [
+    {name = "YMemo Team", email = "team@ymemo.dev"},
+]
+keywords = [
+    "audio",
+    "transcription",
+    "speech-recognition",
+    "aws-transcribe",
+    "azure-speech",
+    "real-time",
+    "meeting-notes"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Office/Business",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "gradio>=5.38.2",
+    "python-dotenv>=1.0.1",
+    "boto3>=1.35.84",
+    "botocore>=1.35.84",
+    "asyncio-throttle>=1.0.2",
+    "SpeechRecognition>=3.12.0",
+    "pyaudio>=0.2.14",
+    "amazon-transcribe>=0.6.0",
+    "azure-cognitiveservices-speech>=1.45.0",
+    "supabase>=2.0.0",
+    "psutil>=7.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-xvfb>=3.0.0",
+    "coverage[toml]>=7.0.0",
+    "pre-commit>=3.0.0",
+    "ruff>=0.1.8",
+    "black>=23.12.0",
+    "isort>=5.13.0",
+    "mypy>=1.8.0",
+    "bandit>=1.7.5",
+    "pydocstyle>=6.3.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-xvfb>=3.0.0",
+    "coverage[toml]>=7.0.0",
+]
+quality = [
+    "ruff>=0.1.8",
+    "black>=23.12.0",
+    "isort>=5.13.0",
+    "mypy>=1.8.0",
+    "bandit>=1.7.5",
+    "pydocstyle>=6.3.0",
+]
+
+[project.scripts]
+ymemo = "main:main"
+
+[project.urls]
+Homepage = "https://github.com/ymemo/ymemo"
+Documentation = "https://github.com/ymemo/ymemo#readme"
+Repository = "https://github.com/ymemo/ymemo.git"
+"Bug Tracker" = "https://github.com/ymemo/ymemo/issues"
+Changelog = "https://github.com/ymemo/ymemo/blob/main/CHANGELOG.md"
+
+# Tool configurations
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["*"]
+exclude = ["tests*"]
+
+# Ruff configuration removed - not used in pre-commit hooks
+
+# Black code formatter
+[tool.black]
+target-version = ['py311']
+line-length = 88
+skip-string-normalization = true
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+# isort import sorting
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+src_paths = ["src", "tests"]
+
+# MyPy configuration removed - not used in pre-commit hooks
+
+# Pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "--color=yes",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "performance: marks tests as performance tests",
+    "smoke: marks tests as smoke tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::RuntimeWarning:pyaudio",
+    "ignore::UserWarning:gradio",
+    "ignore::RuntimeWarning:unittest.mock",
+    "ignore::RuntimeWarning:_pytest.unraisableexception",
+    "ignore:coroutine.*was never awaited:RuntimeWarning",
+    "ignore:.*AsyncMockMixin.*was never awaited:RuntimeWarning",
+    "ignore:.*Enable tracemalloc.*:RuntimeWarning",
+]
+asyncio_mode = "auto"
+timeout = 300
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src"]
+branch = true
+data_file = ".coverage"
+omit = [
+    "*/tests/*",
+    "*/venv/*",
+    "*/.venv/*",
+    "*/env/*",
+    "setup.py",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+show_missing = true
+skip_covered = false
+precision = 2
+fail_under = 25
+
+[tool.coverage.html]
+directory = "coverage_reports/html"
+
+# Bandit and Pydocstyle configurations removed - not used in pre-commit hooks
