@@ -31,7 +31,7 @@ from .interface_constants import (
     UI_DIMENSIONS,
     UI_TEXT,
 )
-from .interface_dialog_handlers import combined_update, handle_download_click
+from .interface_dialog_handlers import combined_update
 from .interface_handlers import (
     clear_dialog,
     get_device_choices_and_default,
@@ -329,13 +329,6 @@ def create_controls():
             interactive=button_configs["save_btn"].interactive,
         )
 
-        # Download transcript button
-        download_transcript_btn = gr.DownloadButton(
-            label=BUTTON_TEXT["download_transcript"],
-            variant="secondary",
-            visible=False,  # Initially hidden until transcript is available
-        )
-
         return (
             device_dropdown,
             refresh_btn,
@@ -343,7 +336,6 @@ def create_controls():
             start_btn,
             stop_btn,
             save_meeting_btn,
-            download_transcript_btn,
         )
 
 
@@ -418,7 +410,6 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                     start_btn,
                     stop_btn,
                     save_meeting_btn,
-                    download_transcript_btn,
                 ) = create_controls()
 
         with gr.Tab("Persona", id="persona_tab"):
@@ -579,15 +570,8 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             outputs=[
                 dialog_state,
                 dialog_output,
-                download_transcript_btn,
                 duration_field,
             ],
-        )
-
-        # Download click handler moved to interface_dialog_handlers.py
-
-        download_transcript_btn.click(
-            fn=handle_download_click, outputs=[download_transcript_btn]
         )
 
         # Clear dialog functionality - wire up chatbot's built-in clear event

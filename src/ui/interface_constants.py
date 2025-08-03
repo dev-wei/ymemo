@@ -22,7 +22,6 @@ BUTTON_TEXT = {
     "start_recording": "🎤 Start Recording",
     "stop_recording": "⏹️ Stop Recording",
     "save_meeting": "💾 Save as New Meeting",
-    "download_transcript": "📄 Download Transcript",
     "clear_dialog": "🗑️ Clear",
     "starting": "🔄 Starting...",
     "stopping": "⏳ Stopping...",

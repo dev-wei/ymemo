@@ -7,10 +7,7 @@ import gradio as gr
 
 from .interface_handlers import (
     conditional_update,
-    create_download_button,
-    download_transcript,
     get_current_duration_display,
-    update_download_button_visibility,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,42 +110,24 @@ class UIUpdateManager:
     def __init__(self):
         """Initialize the UI update manager."""
 
-    def combined_update(self) -> tuple[Any, Any, Any, str]:
-        """Update dialog, download button visibility, and duration display.
+    def combined_update(self) -> tuple[Any, Any, str]:
+        """Update dialog and duration display.
 
         Returns:
-            Tuple of (dialog_state_result, dialog_output_result, download_button_result, duration_display_result)
+            Tuple of (dialog_state_result, dialog_output_result, duration_display_result)
         """
         try:
             dialog_state_result, dialog_output_result = conditional_update()
-            download_button_result = update_download_button_visibility()
             duration_display_result = get_current_duration_display()
             return (
                 dialog_state_result,
                 dialog_output_result,
-                download_button_result,
                 duration_display_result,
             )
         except Exception as e:
             logger.error(f"Error in combined update: {e}")
             # Return safe defaults
-            return gr.skip(), gr.skip(), gr.skip(), "00:00"
-
-    def handle_download_click(self) -> gr.DownloadButton:
-        """Handle download button click - generate file and return DownloadButton with value.
-
-        Returns:
-            Updated DownloadButton component with file path
-        """
-        try:
-            file_path = download_transcript()
-            return create_download_button(file_path)
-        except Exception as e:
-            logger.error(f"Error handling download click: {e}")
-            # Return default download button state
-            return gr.DownloadButton(
-                label="Download Transcript", variant="secondary", visible=False
-            )
+            return gr.skip(), gr.skip(), "00:00"
 
 
 # Global instances for consistent state management
@@ -164,11 +143,6 @@ def update_dialog_state(
     return dialog_state_manager.update_dialog_state(current_messages, new_message)
 
 
-def combined_update() -> tuple[Any, Any, Any, str]:
-    """Update dialog, download button visibility, and duration display."""
+def combined_update() -> tuple[Any, Any, str]:
+    """Update dialog and duration display."""
     return ui_update_manager.combined_update()
-
-
-def handle_download_click() -> gr.DownloadButton:
-    """Handle download button click - generate file and return DownloadButton with value."""
-    return ui_update_manager.handle_download_click()
