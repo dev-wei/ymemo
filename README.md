@@ -219,14 +219,16 @@ YMemo's provider system features enterprise-grade architecture:
 <summary><b>🚀 AWS Transcribe Configuration</b></summary>
 
 ```bash
-# Advanced AWS settings
-export AWS_CONNECTION_STRATEGY=dual           # Single or dual connections
+# Advanced AWS settings (connection strategy now auto-detected)
+# export AWS_CONNECTION_STRATEGY=dual         # DEPRECATED - auto-detected based on device
 export AWS_DUAL_FALLBACK_ENABLED=true        # Automatic fallback
 export AWS_MAX_SPEAKERS=10                    # Speaker diarization limit
 export ENABLE_PARTIAL_RESULTS=true           # Real-time partial results
 ```
 
-**Dual-Channel Mode**: YMemo's unique dual-channel architecture splits stereo audio for enhanced accuracy and speaker separation.
+**Auto-Detected Connection Strategy**: YMemo automatically chooses the optimal AWS connection strategy based on your audio device:
+- **1-channel devices** → Single AWS Transcribe connection
+- **2+ channel devices** → Dual AWS Transcribe connections for enhanced accuracy and speaker separation
 
 </details>
 

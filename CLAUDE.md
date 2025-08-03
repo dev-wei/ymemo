@@ -154,7 +154,7 @@ source .venv/bin/activate && python -c "from src.utils.database import test_data
 *Provider Selection:*
 
 - `TRANSCRIPTION_PROVIDER` - Choose transcription provider ('aws', 'azure', 'whisper', 'google', default: 'aws')
-  - `aws` provider now intelligently switches between single and dual connections automatically
+  - `aws` provider automatically detects device channels and chooses optimal connection strategy
 - `CAPTURE_PROVIDER` - Choose audio capture provider ('pyaudio', 'file', default: 'pyaudio')
 
 *Audio Settings:*
@@ -174,7 +174,9 @@ source .venv/bin/activate && python -c "from src.utils.database import test_data
 
 *AWS Connection Strategy:*
 
-- `AWS_CONNECTION_STRATEGY` - Connection mode ('auto', 'single', 'dual', default: 'auto')
+- Connection strategy is now **automatically determined** based on device channels:
+  - 1-channel device → Single AWS Transcribe connection
+  - 2+ channel device → Dual AWS Transcribe connections for optimal transcription
 - `AWS_DUAL_FALLBACK_ENABLED` - Enable fallback to dual connections (true/false, default: true)  
 - `AWS_CHANNEL_BALANCE_THRESHOLD` - Channel imbalance threshold for fallback (0.0-1.0, default: 0.3)
 

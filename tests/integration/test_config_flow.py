@@ -28,7 +28,6 @@ class TestConfigurationFlow(BaseIntegrationTest):
     def setup_test_env(self):
         """Set up test environment variables."""
         self.test_env_vars = {
-            "AWS_CONNECTION_STRATEGY": "dual",
             "AWS_DUAL_CONNECTION_TEST_MODE": "left_only",
             "AWS_DUAL_SAVE_SPLIT_AUDIO": "true",
             "AWS_DUAL_SAVE_RAW_AUDIO": "true",
@@ -53,7 +52,7 @@ class TestConfigurationFlow(BaseIntegrationTest):
     def test_environment_variables_loading(self):
         """Test that environment variables are loaded correctly."""
         # Test critical environment variables
-        critical_vars = ["AWS_CONNECTION_STRATEGY", "AWS_DUAL_SAVE_SPLIT_AUDIO"]
+        critical_vars = ["AWS_DUAL_SAVE_SPLIT_AUDIO"]  # AWS_CONNECTION_STRATEGY removed
 
         for var in critical_vars:
             value = os.getenv(var)
@@ -68,7 +67,7 @@ class TestConfigurationFlow(BaseIntegrationTest):
 
         # Verify key configuration values
         assert config.transcription_provider == "aws"
-        assert config.aws_connection_strategy == "dual"
+        # Note: aws_connection_strategy removed - now auto-detected based on device channels
         assert config.aws_dual_connection_test_mode == "left_only"
         assert config.aws_dual_save_split_audio is True
         assert config.aws_dual_save_raw_audio is True
@@ -80,11 +79,11 @@ class TestConfigurationFlow(BaseIntegrationTest):
         config = get_config()
         transcription_config = config.get_transcription_config()
 
-        # Verify all required keys are present
+        # Verify all required keys are present (connection_strategy removed - auto-detected)
         required_keys = [
             "region",
             "language_code",
-            "connection_strategy",
+            # Note: "connection_strategy" removed - now auto-detected based on device channels
             "dual_save_split_audio",
             "dual_save_raw_audio",
             "dual_audio_save_path",
@@ -95,8 +94,8 @@ class TestConfigurationFlow(BaseIntegrationTest):
         for key in required_keys:
             assert key in transcription_config, f"Missing key: {key}"
 
-        # Verify critical values
-        assert transcription_config["connection_strategy"] == "dual"
+        # Verify critical values (connection_strategy no longer in config)
+        # Note: connection_strategy no longer in transcription config - auto-detected based on device channels
         assert transcription_config["dual_save_split_audio"] is True
         assert transcription_config["dual_connection_test_mode"] == "left_only"
 

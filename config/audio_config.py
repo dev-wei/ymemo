@@ -52,8 +52,9 @@ class AudioSystemConfig:
     aws_language_code: str = 'en-US'
     aws_max_speakers: int = 10
 
-    # AWS Connection Strategy settings
-    aws_connection_strategy: str = 'auto'  # 'auto', 'single', 'dual'
+    # AWS Connection Strategy: Now automatically determined based on device channels
+    # - 1 channel device → Single AWS connection
+    # - 2+ channel device → Dual AWS connections
     aws_dual_fallback_enabled: bool = True
     aws_channel_balance_threshold: float = (
         0.3  # Threshold for detecting severe channel imbalance
@@ -134,6 +135,14 @@ class AudioSystemConfig:
             ),
         )
 
+        # Show informational message if user still has deprecated AWS_CONNECTION_STRATEGY
+        if 'AWS_CONNECTION_STRATEGY' in os.environ:
+            logger.warning(
+                "⚠️ AWS_CONNECTION_STRATEGY is no longer supported and will be ignored. "
+                "Connection strategy is now automatically determined based on device channels: "
+                "1 channel = single connection, 2+ channels = dual connections."
+            )
+
         return cls(
             transcription_provider=os.getenv('TRANSCRIPTION_PROVIDER', 'aws'),
             capture_provider=os.getenv('CAPTURE_PROVIDER', 'pyaudio'),
@@ -144,7 +153,6 @@ class AudioSystemConfig:
             aws_region=os.getenv('AWS_REGION', 'us-east-1'),
             aws_language_code=os.getenv('AWS_LANGUAGE_CODE', 'en-US'),
             aws_max_speakers=cls._safe_int(os.getenv('AWS_MAX_SPEAKERS', '10'), 10),
-            aws_connection_strategy=os.getenv('AWS_CONNECTION_STRATEGY', 'auto'),
             aws_dual_fallback_enabled=cls._safe_bool(
                 os.getenv('AWS_DUAL_FALLBACK_ENABLED', 'true')
             ),
@@ -196,7 +204,7 @@ class AudioSystemConfig:
             return {
                 'region': self.aws_region,
                 'language_code': self.aws_language_code,
-                'connection_strategy': self.aws_connection_strategy,
+                # Note: connection_strategy removed - now auto-detected based on device channels
                 'dual_fallback_enabled': self.aws_dual_fallback_enabled,
                 'channel_balance_threshold': self.aws_channel_balance_threshold,
                 'dual_connection_test_mode': self.aws_dual_connection_test_mode,
@@ -379,14 +387,6 @@ class AudioSystemConfig:
                     "AWS language code is required when using AWS transcription provider"
                 )
 
-            # Validate AWS connection strategy
-            valid_strategies = ['auto', 'single', 'dual']
-            if self.aws_connection_strategy not in valid_strategies:
-                errors.append(
-                    f"Invalid aws_connection_strategy '{self.aws_connection_strategy}'. "
-                    f"Valid options: {', '.join(valid_strategies)}"
-                )
-
             # Validate AWS dual connection test mode
             valid_test_modes = ['left_only', 'right_only', 'full']
             if self.aws_dual_connection_test_mode not in valid_test_modes:
@@ -493,7 +493,7 @@ def get_config() -> AudioSystemConfig:
     logger.info(f"  - Capture Provider: {config.capture_provider}")
     logger.info(f"  - AWS Region: {config.aws_region}")
     logger.info(f"  - AWS Language: {config.aws_language_code}")
-    logger.info(f"  - AWS Connection Strategy: {config.aws_connection_strategy}")
+    logger.info(f"  - AWS Connection Strategy: auto-detected based on device channels")
     logger.info(f"  - AWS Dual Test Mode: {config.aws_dual_connection_test_mode}")
 
     # Enhanced audio saving configuration logging
@@ -554,7 +554,7 @@ def print_config_summary() -> None:
     print("AWS Configuration:")
     print(f"  - Region: {config.aws_region}")
     print(f"  - Language: {config.aws_language_code}")
-    print(f"  - Connection Strategy: {config.aws_connection_strategy}")
+    print(f"  - Connection Strategy: auto-detected based on device channels")
     print(f"  - Dual Connection Test Mode: {config.aws_dual_connection_test_mode}")
     if config.aws_dual_save_split_audio or config.aws_dual_save_raw_audio:
         print(

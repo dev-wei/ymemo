@@ -23,7 +23,6 @@ class TestAudioConfigValidation(BaseTest):
     def test_environment(self):
         """Set up test environment variables."""
         test_env = {
-            "AWS_CONNECTION_STRATEGY": "dual",
             "AWS_DUAL_CONNECTION_TEST_MODE": "left_only",
             "AWS_DUAL_SAVE_SPLIT_AUDIO": "true",
             "AWS_DUAL_AUDIO_SAVE_PATH": "./debug_audio/",
@@ -39,7 +38,7 @@ class TestAudioConfigValidation(BaseTest):
 
         assert config is not None
         assert config.transcription_provider == "aws"
-        assert config.aws_connection_strategy == "dual"
+        # Note: aws_connection_strategy removed - now auto-detected based on device channels
         assert config.aws_dual_connection_test_mode == "left_only"
         assert config.aws_dual_save_split_audio is True
 
@@ -171,11 +170,7 @@ class TestAudioConfigValidation(BaseTest):
 
         # Should return the same values (not necessarily same instance)
         assert config1.transcription_provider == config2.transcription_provider
-        assert config1.aws_connection_strategy == config2.aws_connection_strategy
+        # Note: aws_connection_strategy removed - now auto-detected based on device channels
 
-        # Changes to environment should be reflected in new config calls
-        with patch.dict(os.environ, {"AWS_CONNECTION_STRATEGY": "single"}):
-            # Depending on implementation, this might require cache clearing
-            # For now, just verify the mechanism works
-            get_config()
-            # The actual behavior depends on whether there's caching implemented
+        # Test that get_config() works consistently
+        get_config()

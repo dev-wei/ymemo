@@ -24,7 +24,6 @@ class TestRealAWSIntegration(BaseIntegrationTest):
         """Set up AWS test environment."""
         test_env = {
             "LOG_LEVEL": "DEBUG",
-            "AWS_CONNECTION_STRATEGY": "dual",
             "AWS_DUAL_CONNECTION_TEST_MODE": "left_only",
             "AWS_DUAL_SAVE_SPLIT_AUDIO": "true",
             "AWS_DUAL_SAVE_RAW_AUDIO": "true",
@@ -47,8 +46,8 @@ class TestRealAWSIntegration(BaseIntegrationTest):
         config = get_config()
         transcription_config = config.get_transcription_config()
 
-        # Verify configuration values
-        assert transcription_config["connection_strategy"] == "dual"
+        # Verify configuration values (connection_strategy removed - now auto-detected)
+        # Note: connection_strategy no longer in transcription config - auto-detected based on device channels
         assert transcription_config["dual_connection_test_mode"] == "left_only"
         assert transcription_config["dual_save_split_audio"] is True
         assert transcription_config["dual_save_raw_audio"] is True
@@ -131,17 +130,11 @@ class TestRealAWSIntegration(BaseIntegrationTest):
         config = get_config()
 
         # Environment values should override defaults
-        assert config.aws_connection_strategy == "dual"  # From environment
+        # Note: aws_connection_strategy removed - now auto-detected based on device channels
         assert config.aws_dual_connection_test_mode == "left_only"  # From environment
         assert config.aws_dual_save_split_audio is True  # From environment
 
-        # Test with different environment values
-        with patch.dict(os.environ, {"AWS_CONNECTION_STRATEGY": "single"}):
-            new_config = get_config()
-            # Note: Depending on caching implementation, this might not change immediately
-            # This test verifies the mechanism works
-            transcription_config = new_config.get_transcription_config()
-            assert "connection_strategy" in transcription_config
+        # Note: AWS_CONNECTION_STRATEGY removed - connection strategy now auto-detected
 
 
 class TestRealApplicationScenarios(BaseIntegrationTest):
@@ -160,7 +153,7 @@ class TestRealApplicationScenarios(BaseIntegrationTest):
         # Set up test environment
         with patch.dict(
             os.environ,
-            {"AWS_CONNECTION_STRATEGY": "dual", "AWS_DUAL_SAVE_SPLIT_AUDIO": "true"},
+            {"AWS_DUAL_SAVE_SPLIT_AUDIO": "true"},
         ):
             # Replicate session_manager.py approach
             from src.core.processor import AudioProcessor

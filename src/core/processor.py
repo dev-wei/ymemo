@@ -276,7 +276,7 @@ class AudioProcessor:
                     config = {
                         "region": fresh_config.aws_region,
                         "language_code": fresh_config.aws_language_code,  # Fresh language!
-                        "connection_strategy": fresh_config.aws_connection_strategy,
+                        # Note: connection_strategy removed - now auto-detected based on device channels
                         "dual_fallback_enabled": fresh_config.aws_dual_fallback_enabled,
                         "channel_balance_threshold": fresh_config.aws_channel_balance_threshold,
                         "dual_connection_test_mode": fresh_config.aws_dual_connection_test_mode,
@@ -390,7 +390,7 @@ class AudioProcessor:
 
             # Log channel processing strategy info
             logger.info(
-                "🔧 AudioProcessor: Channel processing strategy - 1ch→1ch(mono), 2ch→1ch(auto/single) or 2ch(dual), 3-4ch→2ch(dual), >4ch→error"
+                "🔧 AudioProcessor: Automatic channel detection - 1ch→single connection, 2ch→dual connections, 3-4ch→dual connections, >4ch→error"
             )
 
             # Start transcription stream with error handling
@@ -402,30 +402,27 @@ class AudioProcessor:
             ):
                 logger.debug("🎯 AudioProcessor: Starting transcription stream...")
 
-                # Determine processed channel count based on connection strategy and channel processing strategy
+                # Determine processed channel count based on automatic device channel detection
                 capture_channels = optimized_audio_config.channels
 
-                # Check if dual connection strategy is explicitly requested (reuse existing system_config)
-                dual_strategy_requested = (
-                    system_config.aws_connection_strategy == "dual"
-                )
-
                 if capture_channels == 1:
-                    # 1 channel → always mono
+                    # 1 channel → always mono (single AWS connection)
                     processed_channels = 1
+                    logger.info(
+                        "🎤 AudioProcessor: 1-channel device detected → using single AWS Transcribe connection"
+                    )
                 elif capture_channels == 2:
-                    if dual_strategy_requested:
-                        # 2 channels with dual strategy → preserve as dual-channel for channel splitting
-                        processed_channels = 2
-                        logger.info(
-                            "🔀 AudioProcessor: Preserving 2 channels for dual connection strategy"
-                        )
-                    else:
-                        # 2 channels with auto/single strategy → convert to mono
-                        processed_channels = 1
+                    # 2 channels → automatic dual connections for optimal transcription
+                    processed_channels = 2
+                    logger.info(
+                        "🎤 AudioProcessor: 2-channel device detected → using dual AWS Transcribe connections"
+                    )
                 elif capture_channels <= 4:
                     # 3-4 channels → will be processed to 2 channels (dual-channel)
                     processed_channels = 2
+                    logger.info(
+                        f"🎤 AudioProcessor: {capture_channels}-channel device detected → processing to dual connections"
+                    )
                 else:
                     # >4 channels → not supported, should have been caught earlier
                     raise ValueError(
