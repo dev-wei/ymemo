@@ -22,17 +22,17 @@ QUALITY_CHANGE_EMOJI = "🎚️"
 
 # HTML styling constants
 HTML_STYLE_BASE = """
-<div style="padding: 10px; background-color: var(--background-fill-secondary); border-radius: 8px; margin-top: 5px;">
-    <strong>Current Quality:</strong> {quality}<br>
-    <strong>Sample Rate:</strong> {sample_rate}<br>
-    <small style="color: var(--body-text-color-subdued);">{description}</small>
+<div style='font-size: 0.9em; color: #444;'>
+    <strong>Current Quality:</strong> <span style='color: #666;'>{quality}</span><br>
+    <strong>Sample Rate:</strong> <span style='color: #666;'>{sample_rate}</span><br>
+    <span style='color: #666; font-size: 0.8em;'>{description}</span>
 </div>
 """.strip()
 
 HTML_STYLE_ERROR = """
-<div style="padding: 10px; background-color: var(--background-fill-secondary); border-radius: 8px; margin-top: 5px;">
+<div style='font-size: 0.9em; color: #444;'>
     <strong>Audio Quality:</strong> Unable to load<br>
-    <small style="color: var(--body-text-color-subdued);">Error retrieving quality information</small>
+    <span style='color: #666; font-size: 0.8em;'>Error retrieving quality information</span>
 </div>
 """.strip()
 
