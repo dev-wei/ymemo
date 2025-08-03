@@ -46,6 +46,12 @@ from .meeting_handlers import (
     delete_meeting_by_id_input,
     submit_new_meeting,
 )
+from .persona_handlers import (
+    delete_persona_by_id_input,
+    load_personas_data,
+    refresh_personas,
+    submit_new_persona,
+)
 from .provider_handlers import get_current_provider_info, handle_provider_change
 from .recording_handlers import (
     start_recording,
@@ -382,33 +388,101 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             sidebar_memory_usage,
         ) = create_sidebar()
 
-        # Responsive layout structure
-        # Desktop: [Sidebar (hidden)] [Meeting List] [Live Dialog] [Audio Controls]
-        # Mobile: [Sidebar (hidden)] [Meeting List - Full Width] then [Live Dialog] [Audio Controls]
+        # Tabbed interface structure
+        with gr.Tab("Meeting Transcription", id="meeting_tab"):
+            # Responsive layout structure
+            # Desktop: [Sidebar (hidden)] [Meeting List] [Live Dialog] [Audio Controls]
+            # Mobile: [Sidebar (hidden)] [Meeting List - Full Width] then [Live Dialog] [Audio Controls]
 
-        # Meeting List - Full width on mobile, partial on desktop
-        (
-            meeting_list,
-            meeting_id_input,
-            delete_meeting_btn,
-            delete_status,
-        ) = create_meeting_list()
-
-        # Dialog and Controls - Side by side on all screens, but different proportions
-        with gr.Row(elem_classes=["main-content-row"]):
-            # Center panel - Live Dialog
-            meeting_name_field, duration_field, dialog_output = create_dialog_panel()
-
-            # Right panel - Audio Controls
+            # Meeting List - Full width on mobile, partial on desktop
             (
-                device_dropdown,
-                refresh_btn,
-                status_text,
-                start_btn,
-                stop_btn,
-                save_meeting_btn,
-                download_transcript_btn,
-            ) = create_controls()
+                meeting_list,
+                meeting_id_input,
+                delete_meeting_btn,
+                delete_status,
+            ) = create_meeting_list()
+
+            # Dialog and Controls - Side by side on all screens, but different proportions
+            with gr.Row(elem_classes=["main-content-row"]):
+                # Center panel - Live Dialog
+                meeting_name_field, duration_field, dialog_output = (
+                    create_dialog_panel()
+                )
+
+                # Right panel - Audio Controls
+                (
+                    device_dropdown,
+                    refresh_btn,
+                    status_text,
+                    start_btn,
+                    stop_btn,
+                    save_meeting_btn,
+                    download_transcript_btn,
+                ) = create_controls()
+
+        with gr.Tab("Persona", id="persona_tab"):
+            # Persona feature placeholder
+            gr.Markdown("## Persona Feature")
+            gr.Markdown(
+                "Create and manage personalized transcription profiles and settings."
+            )
+
+            # Persona list section (similar to meeting list)
+            with gr.Column(elem_classes=["persona-list-container"]):
+                gr.Markdown("### Your Personas")
+
+                # Persona list dataframe
+                with gr.Column(elem_classes=["persona-panel"]):
+                    persona_list = gr.Dataframe(
+                        headers=["ID", "Name", "Description", "Created", "Updated"],
+                        datatype=["number", "str", "str", "str", "str"],
+                        value=load_personas_data(),  # Load initial persona data
+                        interactive=False,
+                        show_search="search",
+                        show_fullscreen_button=True,
+                        show_copy_button=True,
+                        show_row_numbers=True,
+                        wrap=True,
+                    )
+
+                # Delete section for personas
+                with gr.Column(elem_classes=["delete-controls-section"]):
+                    with gr.Row():
+                        persona_id_input = gr.Textbox(
+                            label="Persona ID to Delete",
+                            placeholder="Enter persona ID (e.g., 1, 2, 3)",
+                            scale=3,
+                        )
+                        delete_persona_btn = gr.Button(
+                            "🗑️ Delete Persona", variant="stop", scale=1, size="sm"
+                        )
+
+                    # Status message for persona delete operations
+                    delete_persona_status = gr.HTML(
+                        value="💡 Enter a persona ID from the table above and click Delete",
+                        visible=True,
+                    )
+
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### Create New Persona")
+                    persona_name = gr.Textbox(
+                        label="Persona Name",
+                        placeholder="Enter persona name (e.g., 'Professional Meeting', 'Creative Brainstorm')",
+                    )
+                    persona_description = gr.Textbox(
+                        label="Description",
+                        placeholder="Describe this persona's purpose and use case",
+                        lines=3,
+                    )
+
+            with gr.Row():
+                save_persona_btn = gr.Button("Save Persona", variant="primary")
+                refresh_personas_btn = gr.Button("Refresh List", variant="secondary")
+
+            persona_status = gr.HTML(
+                value="Ready to create your first persona profile."
+            )
 
         # Status message component for user feedback (placed near save button)
         with gr.Row():
@@ -532,6 +606,34 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             # Clear the input field after successful operation
             fn=lambda: "",
             outputs=[meeting_id_input],
+        )
+
+        # Persona management event handlers
+        save_persona_btn.click(
+            fn=submit_new_persona,
+            inputs=[persona_name, persona_description],
+            outputs=[persona_status, persona_list],
+        ).then(
+            # Clear the form after successful submission
+            fn=lambda: ("", ""),
+            outputs=[persona_name, persona_description],
+        )
+
+        # Persona deletion handler
+        delete_persona_btn.click(
+            fn=delete_persona_by_id_input,
+            inputs=[persona_id_input],
+            outputs=[persona_list, delete_persona_status],
+        ).then(
+            # Clear the input field after operation
+            fn=lambda: "",
+            outputs=[persona_id_input],
+        )
+
+        # Persona refresh handler
+        refresh_personas_btn.click(
+            fn=refresh_personas,
+            outputs=[persona_list],
         )
 
         # Note: Removed automatic button updates to prevent interference with clicks

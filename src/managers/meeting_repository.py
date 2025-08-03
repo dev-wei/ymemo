@@ -3,7 +3,7 @@
 import logging
 
 from ..core.models import Meeting
-from ..utils.database import get_supabase_client
+from ..utils.database import get_postgresql_client
 from ..utils.exceptions import AudioProcessingError
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ class MeetingRepository:
     """Repository for meeting database operations."""
 
     def __init__(self):
-        self.client = get_supabase_client()
+        self.client = get_postgresql_client()
         self.table_name = "ymemo"
 
     def get_all_meetings(self) -> list[Meeting]:
@@ -25,23 +25,24 @@ class MeetingRepository:
         try:
             logger.info("🔍 Fetching all meetings from database")
 
-            response = (
-                self.client.table(self.table_name)
-                .select(
-                    "id, name, duration, transcription, created_at, audio_file_path"
-                )
-                .order("created_at", desc=True)
-                .execute()
+            query = """
+                SELECT id, name, duration, transcription, created_at, updated_at, audio_file_path
+                FROM {}
+                ORDER BY created_at DESC
+            """.format(
+                self.table_name
             )
 
-            if not response.data:
+            results = self.client.execute_query(query)
+
+            if not results:
                 logger.info("📝 No meetings found in database")
                 return []
 
             meetings = []
-            for row in response.data:
+            for row in results:
                 try:
-                    meeting = Meeting.from_dict(row)
+                    meeting = Meeting.from_dict(dict(row))
                     meetings.append(meeting)
                 except Exception as e:
                     logger.warning(
@@ -77,24 +78,25 @@ class MeetingRepository:
             if not transcription or not transcription.strip():
                 raise ValueError("Transcription cannot be empty")
 
-            # Prepare data for insertion
-            meeting_data = {
-                "name": name.strip(),
-                "duration": duration,
-                "transcription": transcription.strip(),
-                "audio_file_path": audio_file_path,
-            }
+            # Prepare parameters
+            name = name.strip()
+            transcription = transcription.strip()
 
             # Insert into database
-            response = self.client.table(self.table_name).insert(meeting_data).execute()
+            query = """
+                INSERT INTO {} (name, duration, transcription, audio_file_path)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id, name, duration, transcription, created_at, updated_at, audio_file_path
+            """.format(
+                self.table_name
+            )
 
-            if not response.data:
-                raise MeetingRepositoryError(
-                    "Failed to create meeting: No data returned"
-                )
+            result = self.client.execute_insert_returning(
+                query, (name, duration, transcription, audio_file_path)
+            )
 
             # Convert response to Meeting object
-            meeting = Meeting.from_dict(response.data[0])
+            meeting = Meeting.from_dict(result)
 
             logger.info(f"✅ Successfully created meeting with ID: {meeting.id}")
             return meeting
@@ -111,20 +113,21 @@ class MeetingRepository:
         try:
             logger.info(f"🔍 Fetching meeting with ID: {meeting_id}")
 
-            response = (
-                self.client.table(self.table_name)
-                .select(
-                    "id, name, duration, transcription, created_at, audio_file_path"
-                )
-                .eq("id", meeting_id)
-                .execute()
+            query = """
+                SELECT id, name, duration, transcription, created_at, updated_at, audio_file_path
+                FROM {}
+                WHERE id = %s
+            """.format(
+                self.table_name
             )
 
-            if not response.data:
+            results = self.client.execute_query(query, (meeting_id,))
+
+            if not results:
                 logger.info(f"📝 No meeting found with ID: {meeting_id}")
                 return None
 
-            meeting = Meeting.from_dict(response.data[0])
+            meeting = Meeting.from_dict(dict(results[0]))
             logger.info(f"✅ Successfully fetched meeting: {meeting.name}")
             return meeting
 
@@ -137,10 +140,10 @@ class MeetingRepository:
         try:
             logger.info("🔢 Counting meetings in database")
 
-            response = (
-                self.client.table(self.table_name).select("id", count="exact").execute()
-            )
-            count = response.count or 0
+            query = "SELECT COUNT(*) as count FROM {}".format(self.table_name)
+
+            results = self.client.execute_query(query)
+            count = results[0]["count"] if results else 0
 
             logger.info(f"✅ Total meetings count: {count}")
             return count
@@ -155,7 +158,8 @@ class MeetingRepository:
             logger.info("🔌 Testing database connection")
 
             # Try to perform a simple query
-            self.client.table(self.table_name).select("id").limit(1).execute()
+            query = "SELECT 1 FROM {} LIMIT 1".format(self.table_name)
+            self.client.execute_query(query)
 
             logger.info("✅ Database connection test successful")
             return True
@@ -169,24 +173,25 @@ class MeetingRepository:
         try:
             logger.info(f"🔍 Fetching {limit} recent meetings")
 
-            response = (
-                self.client.table(self.table_name)
-                .select(
-                    "id, name, duration, transcription, created_at, audio_file_path"
-                )
-                .order("created_at", desc=True)
-                .limit(limit)
-                .execute()
+            query = """
+                SELECT id, name, duration, transcription, created_at, updated_at, audio_file_path
+                FROM {}
+                ORDER BY created_at DESC
+                LIMIT %s
+            """.format(
+                self.table_name
             )
 
-            if not response.data:
+            results = self.client.execute_query(query, (limit,))
+
+            if not results:
                 logger.info("📝 No recent meetings found")
                 return []
 
             meetings = []
-            for row in response.data:
+            for row in results:
                 try:
-                    meeting = Meeting.from_dict(row)
+                    meeting = Meeting.from_dict(dict(row))
                     meetings.append(meeting)
                 except Exception as e:
                     logger.warning(
@@ -211,16 +216,14 @@ class MeetingRepository:
                 raise ValueError("Invalid meeting ID")
 
             # Delete from database
-            response = (
-                self.client.table(self.table_name)
-                .delete()
-                .eq("id", meeting_id)
-                .execute()
-            )
+            query = "DELETE FROM {} WHERE id = %s".format(self.table_name)
 
-            if response.data:
+            rows_affected = self.client.execute_update(query, (meeting_id,))
+
+            if rows_affected > 0:
                 logger.info(f"✅ Successfully deleted meeting {meeting_id}")
                 return True
+
             logger.warning(f"⚠️ No meeting found with ID {meeting_id}")
             return False
 
