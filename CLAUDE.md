@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 YMemo is a real-time voice meeting transcription application built with Gradio and multiple transcription services (AWS Transcribe and Azure Speech Service). The application captures audio from microphones, sends it to your chosen transcription provider for real-time speech-to-text conversion, and displays the results in a responsive web interface with speaker diarization support.
 
+**Database Architecture**: YMemo uses direct PostgreSQL connection (migrated from Supabase in 2025) for meeting and persona storage with full DDL permissions and automatic timestamp tracking.
+
 ## Development Setup
 
 **IMPORTANT: Always use the virtual environment (.venv) for all Python operations:**
@@ -61,6 +63,19 @@ source .venv/bin/activate && python tests/create_test_audio.py
 
 ```bash
 source .venv/bin/activate && python test_azure_speech_provider.py
+```
+
+### Database Operations
+
+```bash
+# Run pending database migrations
+source .venv/bin/activate && python -c "from src.utils.database import run_database_migrations; successful, failed = run_database_migrations(); print(f'✅ Successful: {successful}'); print(f'❌ Failed: {failed}')"
+
+# Check migration status
+source .venv/bin/activate && python -c "from src.utils.database import get_migration_status; status = get_migration_status(); print(f'Applied: {status[\"applied_count\"]}, Pending: {status[\"pending_count\"]}')"
+
+# Test database connection
+source .venv/bin/activate && python -c "from src.utils.database import test_database_connection; print('✅ Connected' if test_database_connection() else '❌ Failed')"
 ```
 
 ## Architecture Overview
@@ -196,6 +211,18 @@ print_config_summary()  # Shows current configuration
 - `AZURE_SPEECH_TIMEOUT` - Connection timeout in seconds (default: 30)
 - Requires `azure-cognitiveservices-speech>=1.45.0` dependency
 
+**Database Configuration (PostgreSQL):**
+
+- `POSTGRES_URL` - PostgreSQL connection URL (required)
+  - Format: `postgresql://user:password@host:port/database`
+  - Example: `postgresql://postgres:mypassword@localhost:5432/ymemo`
+- Direct PostgreSQL connection with full DDL permissions (migrated from Supabase 2025)
+- Supports automatic schema migrations via `db/migrations/` directory
+- Uses `psycopg2-binary>=2.9.10` for database connectivity (replaces supabase>=2.0.0)
+- Tables: `ymemo` (meetings with created_at/updated_at), `ymemo_persona` (personas)
+- Automatic timestamp triggers maintain `updated_at` fields on record modifications
+- Backward-compatible deprecated API available for gradual migration of client code
+
 ## Testing Strategy
 
 **MIGRATED PYTEST INFRASTRUCTURE (2024):**
@@ -244,8 +271,9 @@ tests/
 **Key Test Principles:**
 
 - **Hardware Independence**: All PyAudio calls mocked, no AWS credentials needed, no device access
+- **Database Independence**: All database operations mocked, no PostgreSQL connection required for tests
 - **Consistent Patterns**: All tests inherit from base classes with standard fixtures
-- **Comprehensive Mocking**: Centralized mock factories for AudioProcessor, Providers, AWS services
+- **Comprehensive Mocking**: Centralized mock factories for AudioProcessor, Providers, AWS services, Database clients
 - **Performance Focus**: Fast execution through effective mocking and parallel-safe design
 
 **Base Test Classes:**
@@ -259,25 +287,27 @@ tests/
 - `MockAudioProcessorFactory` - Standardized AudioProcessor mocks
 - `MockProviderFactory` - Provider mocks with proper interface compliance
 - `MockSessionManagerFactory` - Session manager mocks with state management
+- `MockDatabaseFactory` - PostgreSQL client mocks for database operations without connections
 - AWS mocking patterns for transcription without actual service calls
 
-**Recent Test Infrastructure Improvements (2024):**
+**Recent Test Infrastructure Improvements (2024-2025):**
 
-- **Provider System Refactoring**: Added 88 comprehensive tests for new registry/service architecture
-- **Workspace Migration**: Successfully migrated 7 root directory test files to organized pytest structure
-- **Azure Provider Testing**: Complete Azure Speech Service provider test coverage with comprehensive mocking
-- **Dual Provider System**: Full test coverage for AWS dual-channel architecture with channel splitting
-- **Configuration Validation**: Robust testing of environment variable parsing and configuration validation
-- **Device Selection**: Enhanced device selection testing with unicode support and edge case handling
-- **Async Testing**: Proper async test infrastructure with event loop management and resource cleanup
-- **Performance Optimization**: Test execution time reduced from ~8s to ~4.3s with better mocking strategies
+- **Provider System Refactoring (2024)**: Added 88 comprehensive tests for new registry/service architecture
+- **Workspace Migration (2024)**: Successfully migrated 7 root directory test files to organized pytest structure
+- **Azure Provider Testing (2024)**: Complete Azure Speech Service provider test coverage with comprehensive mocking
+- **Dual Provider System (2024)**: Full test coverage for AWS dual-channel architecture with channel splitting
+- **Configuration Validation (2024)**: Robust testing of environment variable parsing and configuration validation
+- **Device Selection (2024)**: Enhanced device selection testing with unicode support and edge case handling
+- **Async Testing (2024)**: Proper async test infrastructure with event loop management and resource cleanup
+- **Performance Optimization (2024)**: Test execution time reduced from ~8s to ~4.3s with better mocking strategies
+- **Database Migration Testing (2025)**: PostgreSQL migration from Supabase with zero hardware dependencies and comprehensive repository mocking
 
 **Legacy Test Files (Deprecated):**
 
 - Use migrated pytest versions instead of legacy unittest files
 - `test_core_functionality.py` - Use `tests/unit/` instead
 - `test_file_audio_capture.py` - Use `tests/audio/test_device_selection.py` instead
-- Always follow these rules: Tests should NOT require hardware devices, AWS credentials, or network connectivity
+- Always follow these rules: Tests should NOT require hardware devices, AWS credentials, PostgreSQL database, or network connectivity
 
 ## File Structure
 
@@ -296,34 +326,59 @@ src/
 ├── core/                    # Core business logic and interfaces
 │   ├── interfaces.py        # Abstract interfaces for all providers
 │   ├── factory.py           # Provider factory with registries
+│   ├── models.py            # Data models (Meeting, Persona, RecordingSession)
 │   └── processor.py         # Main audio processing pipeline
 ├── exceptions/              # Custom exceptions (NEW 2024)
 │   └── provider_exceptions.py  # Provider-specific exception hierarchy
 ├── managers/                # Management classes
-│   └── session_manager.py   # Singleton session management
+│   ├── session_manager.py   # Singleton session management
+│   ├── meeting_repository.py   # Meeting database operations (MIGRATED 2025)
+│   └── persona_repository.py   # Persona database operations (NEW 2024)
 ├── services/                # Service layer (NEW 2024)
 │   └── provider_service.py     # High-level provider service facade
 ├── ui/                      # User interface
 │   ├── interface.py         # Gradio web interface with responsive design
 │   └── provider_handlers.py    # Provider selection UI handlers (REFACTORED 2024)
 └── utils/                   # Utility modules
+    ├── database.py          # PostgreSQL database client (MIGRATED FROM SUPABASE 2025)
     ├── device_utils.py      # Audio device utilities
     ├── exceptions.py        # Custom exceptions
     └── status_manager.py    # Status management
+
+db/
+├── migrations/              # Database schema migrations (NEW 2025)
+│   ├── 001_baseline_ymemo_table.sql
+│   ├── 002_create_persona_table.sql
+│   └── 003_add_updated_at_to_ymemo.sql
+└── tools/
+    └── migration_runner.py  # PostgreSQL migration runner (MIGRATED 2025)
 ```
 
 ## Key Files
 
+**Core Application:**
 - `main.py` - Application entry point with CLI arguments
 - `src/core/interfaces.py` - Abstract interfaces for all providers
 - `src/core/factory.py` - Provider factory with registries
 - `src/core/processor.py` - Main audio processing pipeline
+- `src/core/models.py` - Data models (Meeting with updated_at, Persona, RecordingSession)
+
+**Database Layer (MIGRATED FROM SUPABASE 2025):**
+- `src/utils/database.py` - PostgreSQL client with connection management and DDL support
+- `src/managers/meeting_repository.py` - Meeting CRUD operations with updated_at support
+- `src/managers/persona_repository.py` - Persona management and database operations
+- `db/tools/migration_runner.py` - PostgreSQL migration system with baseline/incremental support
+- `db/migrations/003_add_updated_at_to_ymemo.sql` - Latest migration adding updated_at field
+
+**Session and UI Management:**
 - `src/managers/session_manager.py` - Singleton session management
 - `src/ui/interface.py` - Gradio web interface with responsive design
+- `src/ui/provider_handlers.py` - Provider selection UI handlers (REFACTORED 2024)
+
+**Configuration System:**
 - `src/config/audio_config.py` - Audio system configuration classes
 - `src/config/provider_registry.py` - Provider registry with dataclasses (NEW 2024)
 - `src/services/provider_service.py` - High-level provider service facade (NEW 2024)
-- `src/ui/provider_handlers.py` - Provider selection UI handlers (REFACTORED 2024)
 
 ## Threading and Async
 

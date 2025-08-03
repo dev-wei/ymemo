@@ -13,6 +13,21 @@ APP_CSS = """
         margin-bottom: 20px;
     }
 
+    /* Tab-specific styling */
+    .gradio-tabitem {
+        padding: 10px !important;
+    }
+
+    /* Ensure tab content has proper spacing */
+    .gradio-tabitem > * {
+        margin-bottom: 15px !important;
+    }
+
+    /* Tab navigation styling */
+    .gradio-tab {
+        margin-bottom: 20px !important;
+    }
+
 
     /* Desktop Layout - Default */
     .meeting-list-container {
@@ -53,6 +68,12 @@ APP_CSS = """
         .gradio-container {
             padding: 10px !important;
         }
+
+        /* Tab content adjustments for mobile */
+        .gradio-tabitem {
+            padding: 5px !important;
+        }
+
         .meeting-list-container {
             margin-bottom: 15px !important;
         }
@@ -112,6 +133,12 @@ APP_CSS = """
         .gradio-container {
             padding: 5px !important;
         }
+
+        /* Tab content adjustments for very narrow screens */
+        .gradio-tabitem {
+            padding: 3px !important;
+        }
+
         .meeting-list-container {
             margin-bottom: 10px !important;
         }
