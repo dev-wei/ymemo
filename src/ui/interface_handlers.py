@@ -352,16 +352,19 @@ def create_download_button(file_path):
     )
 
 
-def handle_copy_event(copy_data):
+def handle_copy_event(copy_data=None):
     """Handle copy events from the chatbot."""
     try:
         logger.info("📋 Copy event triggered")
-        logger.info(
-            f"📋 Copied content length: {len(copy_data.value) if copy_data.value else 0} characters"
-        )
+        if copy_data and hasattr(copy_data, 'value'):
+            logger.info(
+                f"📋 Copied content length: {len(copy_data.value) if copy_data.value else 0} characters"
+            )
+        else:
+            logger.info("📋 Copy event occurred (no data available)")
 
         # Log copy usage for analytics (optional)
-        if copy_data.value:
+        if copy_data and hasattr(copy_data, 'value') and copy_data.value:
             content_preview = (
                 copy_data.value[:100] + "..."
                 if len(copy_data.value) > 100

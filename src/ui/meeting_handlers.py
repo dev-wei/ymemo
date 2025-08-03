@@ -110,7 +110,7 @@ class MeetingHandler:
 
     def submit_new_meeting(
         self, meeting_name: str, duration_display: str, dialog_messages: list[dict]
-    ) -> tuple[gr.HTML, Any]:
+    ) -> Any:
         """Submit a new meeting directly to database with validation.
 
         Args:
@@ -119,7 +119,7 @@ class MeetingHandler:
             dialog_messages: List of dialog messages from chatbot
 
         Returns:
-            Tuple of (status_message, updated_meeting_list)
+            Updated meeting list dataframe
         """
         try:
             logger.info(
@@ -128,9 +128,9 @@ class MeetingHandler:
 
             # Validation - Meeting name cannot be empty
             if not meeting_name or not meeting_name.strip():
-                error_msg = "Meeting name cannot be empty"
+                error_msg = "Meeting name cannot be empty ⚠️"
                 logger.warning(f"❌ Validation failed: {error_msg}")
-                return self.create_error_message(error_msg), gr.update()
+                raise gr.Error(error_msg, duration=3)
 
             # Extract transcription from dialog messages
             transcription_text = self.extract_transcription_from_dialog(dialog_messages)
@@ -174,18 +174,19 @@ class MeetingHandler:
                     f"📋 Refreshed meeting list with {len(refreshed_meetings)} meetings"
                 )
 
-                # Return empty status message and refreshed meeting list
-                return gr.HTML(""), refreshed_meetings
-            error_msg = f"Failed to save meeting: {message}"
+                # Return refreshed meeting list
+                return refreshed_meetings
+            error_msg = f"Failed to save meeting: {message} 💥!"
             logger.error(f"❌ {error_msg}")
-            # Keep existing meeting list unchanged on error
-            return self.create_error_message(error_msg), gr.update()
+            raise gr.Error(error_msg, duration=5)
 
+        except gr.Error:
+            # Re-raise gradio errors (validation errors from above)
+            raise
         except Exception as e:
-            error_msg = f"Unexpected error: {str(e)}"
+            error_msg = f"Unexpected error: {str(e)} 💥!"
             logger.error(f"❌ Error submitting meeting: {e}", exc_info=True)
-            # Keep existing meeting list unchanged on error
-            return self.create_error_message(error_msg), gr.update()
+            raise gr.Error(error_msg, duration=5)
 
     def delete_meeting_by_id_input(self, meeting_id_text: str) -> tuple[Any, gr.update]:
         """Delete a meeting by ID entered in text field.
@@ -326,7 +327,7 @@ meeting_handler = MeetingHandler()
 # Wrapper functions to maintain compatibility with existing interface code
 def submit_new_meeting(
     meeting_name: str, duration_display: str, dialog_messages: list[dict]
-) -> tuple[gr.HTML, Any]:
+) -> Any:
     """Submit a new meeting directly to database with validation."""
     return meeting_handler.submit_new_meeting(
         meeting_name, duration_display, dialog_messages

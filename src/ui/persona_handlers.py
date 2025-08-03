@@ -10,9 +10,29 @@ from ..managers.persona_repository import (
     create_persona,
     delete_persona_by_id,
     get_all_personas,
+    update_persona,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def validate_persona_id_exists(persona_id: int) -> bool:
+    """Check if persona ID exists in current database.
+
+    Args:
+        persona_id: The persona ID to validate
+
+    Returns:
+        bool: True if persona exists, False otherwise
+    """
+    try:
+        from ..managers.persona_repository import get_persona_by_id
+
+        persona = get_persona_by_id(persona_id)
+        return persona is not None
+    except Exception as e:
+        logger.warning(f"⚠️ Error validating persona ID {persona_id}: {e}")
+        return False
 
 
 def load_personas_data() -> List[List]:
@@ -48,108 +68,140 @@ def load_personas_data() -> List[List]:
         return []
 
 
-def submit_new_persona(name: str, description: str) -> Tuple[gr.HTML, gr.Dataframe]:
-    """Handle persona creation form submission.
+def submit_new_persona(persona_id: str, name: str, description: str) -> gr.Dataframe:
+    """Handle persona creation or update form submission.
 
     Args:
+        persona_id: Persona ID from the form (empty for new, populated for update)
         name: Persona name from the form
         description: Persona description from the form
 
     Returns:
-        Tuple of (status_message_update, dataframe_update)
+        Updated dataframe
     """
     try:
-        logger.info(f"💾 Processing new persona submission: {name}")
+        logger.info(
+            f"💾 Processing persona submission: ID='{persona_id}', name='{name}'"
+        )
 
         # Validate input
         if not name or not name.strip():
-            error_msg = "❌ Persona name cannot be empty"
-            logger.warning(error_msg)
-            return (
-                gr.HTML(value=error_msg, visible=True),
-                gr.Dataframe(value=load_personas_data()),
+            logger.warning("❌ Empty persona name in submission")
+            gr.Warning("Persona name cannot be empty ⚠️", duration=3)
+            return gr.Dataframe(value=load_personas_data())
+
+        # Determine if this is create or update based on persona_id
+        is_update = persona_id and persona_id.strip()
+
+        if is_update:
+            # Update existing persona
+            try:
+                persona_id_int = int(persona_id.strip())
+                logger.info(f"🔄 Updating existing persona ID: {persona_id_int}")
+
+                updated_persona = update_persona(
+                    persona_id=persona_id_int,
+                    name=name.strip(),
+                    description=description.strip() if description else None,
+                )
+
+                if updated_persona:
+                    logger.info(
+                        f"✅ Successfully updated persona: {updated_persona.name}"
+                    )
+                    gr.Info(
+                        f"Persona '{updated_persona.name}' updated successfully! 🔄",
+                        duration=3,
+                    )
+                else:
+                    logger.warning(f"❌ Failed to update persona ID {persona_id_int}")
+                    gr.Warning(
+                        f"Persona with ID {persona_id_int} not found for update ⚠️",
+                        duration=4,
+                    )
+
+            except ValueError:
+                logger.warning(f"❌ Invalid persona ID format for update: {persona_id}")
+                gr.Warning(f"Invalid persona ID format: {persona_id} ⚠️", duration=3)
+        else:
+            # Create new persona
+            logger.info("➕ Creating new persona")
+            persona = create_persona(
+                name=name.strip(),
+                description=description.strip() if description else None,
             )
-
-        # Create the persona
-        persona = create_persona(
-            name=name.strip(), description=description.strip() if description else None
-        )
-
-        # Success message
-        success_msg = f"✅ Successfully created persona: {persona.name}"
-        logger.info(success_msg)
+            logger.info(f"✅ Successfully created persona: {persona.name}")
+            gr.Info(f"Persona '{persona.name}' created successfully! ➕", duration=3)
 
         # Return updated UI components
-        return (
-            gr.HTML(value=success_msg, visible=True),
-            gr.Dataframe(value=load_personas_data()),
-        )
+        return gr.Dataframe(value=load_personas_data())
 
     except PersonaRepositoryError as e:
-        error_msg = f"❌ Database error: {str(e)}"
-        logger.error(error_msg)
-        return (
-            gr.HTML(value=error_msg, visible=True),
-            gr.Dataframe(value=load_personas_data()),
-        )
+        logger.error(f"❌ Database error: {str(e)}")
+        gr.Warning(f"Database error: {str(e)} 💥!", duration=5)
+        return gr.Dataframe(value=load_personas_data())
     except Exception as e:
-        error_msg = f"❌ Unexpected error creating persona: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return (
-            gr.HTML(value=error_msg, visible=True),
-            gr.Dataframe(value=load_personas_data()),
-        )
+        logger.error(f"❌ Unexpected error processing persona: {str(e)}", exc_info=True)
+        gr.Warning(f"Unexpected error processing persona: {str(e)} 💥!", duration=5)
+        return gr.Dataframe(value=load_personas_data())
 
 
-def delete_persona_by_id_input(persona_id_str: str) -> Tuple[gr.Dataframe, gr.HTML]:
+def delete_persona_by_id_input(persona_id_str: str) -> gr.Dataframe:
     """Handle persona deletion by ID from input field.
 
     Args:
         persona_id_str: Persona ID as string from input field
 
     Returns:
-        Tuple of (updated_dataframe, status_message)
+        Updated dataframe
     """
     try:
         logger.info(f"🗑️ Processing persona deletion request: {persona_id_str}")
 
         # Validate input
         if not persona_id_str or not persona_id_str.strip():
-            error_msg = "❌ Please enter a persona ID"
-            logger.warning(error_msg)
-            return (gr.Dataframe(value=load_personas_data()), gr.HTML(value=error_msg))
+            logger.warning("❌ Empty persona ID input for delete operation")
+            gr.Warning("Please enter a persona ID to delete ⚠️", duration=3)
+            return gr.Dataframe(value=load_personas_data())
 
         # Parse persona ID
         try:
             persona_id = int(persona_id_str.strip())
         except ValueError:
-            error_msg = f"❌ Invalid persona ID format: {persona_id_str}"
-            logger.warning(error_msg)
-            return (gr.Dataframe(value=load_personas_data()), gr.HTML(value=error_msg))
+            logger.warning(f"❌ Invalid persona ID format: {persona_id_str}")
+            gr.Warning(f"Invalid persona ID format: {persona_id_str} ⚠️", duration=3)
+            return gr.Dataframe(value=load_personas_data())
+
+        # Validate persona ID exists before attempting deletion
+        if not validate_persona_id_exists(persona_id):
+            logger.warning(f"❌ Persona ID {persona_id} not found for deletion")
+            gr.Warning(
+                f"Persona with ID {persona_id} not found in the current list ⚠️",
+                duration=4,
+            )
+            return gr.Dataframe(value=load_personas_data())
 
         # Attempt deletion
         success = delete_persona_by_id(persona_id)
 
         if success:
-            success_msg = f"✅ Successfully deleted persona ID: {persona_id}"
-            logger.info(success_msg)
-            status_message = gr.HTML(value=success_msg)
+            logger.info(f"✅ Successfully deleted persona ID: {persona_id}")
         else:
-            error_msg = f"❌ Persona with ID {persona_id} not found"
-            logger.warning(error_msg)
-            status_message = gr.HTML(value=error_msg)
+            logger.warning(f"❌ Failed to delete persona with ID {persona_id}")
+            gr.Warning(f"Failed to delete persona with ID {persona_id} ⚠️", duration=4)
+            return gr.Dataframe(value=load_personas_data())
 
-        # Return updated dataframe and status
-        return (gr.Dataframe(value=load_personas_data()), status_message)
+        # Return updated dataframe
+        return gr.Dataframe(value=load_personas_data())
 
     except PersonaRepositoryError as e:
-        error_msg = f"❌ Database error: {str(e)}"
-        logger.error(error_msg)
-        return (gr.Dataframe(value=load_personas_data()), gr.HTML(value=error_msg))
+        logger.error(f"❌ Database error: {str(e)}")
+        gr.Warning(f"Database error: {str(e)} 💥!", duration=5)
+        return gr.Dataframe(value=load_personas_data())
     except Exception as e:
-        error_msg = f"❌ Unexpected error deleting persona: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return (gr.Dataframe(value=load_personas_data()), gr.HTML(value=error_msg))
+        logger.error(f"❌ Unexpected error deleting persona: {str(e)}", exc_info=True)
+        gr.Warning(f"Unexpected error deleting persona: {str(e)} 💥!", duration=5)
+        return gr.Dataframe(value=load_personas_data())
 
 
 def refresh_personas() -> gr.Dataframe:
@@ -164,3 +216,96 @@ def refresh_personas() -> gr.Dataframe:
     except Exception as e:
         logger.error(f"❌ Failed to refresh personas: {e}")
         return gr.Dataframe(value=[])
+
+
+def create_persona_from_id(persona_id_str: str) -> Tuple[gr.Dataframe, str, str, str]:
+    """Clear form fields to prepare for creating a new persona.
+
+    Args:
+        persona_id_str: Persona ID as string from input field (unused but kept for compatibility)
+
+    Returns:
+        Tuple of (updated_dataframe, empty_id, empty_name, empty_description)
+    """
+    try:
+        logger.info("➕ Processing create new persona request - clearing form fields")
+        logger.info("✅ Form fields cleared for new persona creation")
+
+        # Return updated UI components with cleared form fields
+        return (
+            gr.Dataframe(value=load_personas_data()),  # Refresh the list
+            "",  # Clear persona ID field (empty for new)
+            "",  # Clear persona name field
+            "",  # Clear persona description field
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Unexpected error clearing form: {str(e)}", exc_info=True)
+        raise gr.Error(f"Unexpected error clearing form: {str(e)} 💥!", duration=5)
+
+
+def load_persona_by_id(persona_id_str: str) -> Tuple[gr.Dataframe, str, str, str]:
+    """Load and populate form fields with a specific persona by ID.
+
+    Args:
+        persona_id_str: Persona ID as string from input field
+
+    Returns:
+        Tuple of (updated_dataframe, persona_id, persona_name, persona_description)
+    """
+    try:
+        logger.info(f"📋 Processing load persona request: {persona_id_str}")
+
+        # Validate input
+        if not persona_id_str or not persona_id_str.strip():
+            logger.warning("❌ Empty persona ID input for load operation")
+            gr.Warning("Please enter a persona ID to load ⚠️", duration=3)
+            return (gr.Dataframe(value=load_personas_data()), "", "", "")
+
+        # Parse persona ID
+        try:
+            persona_id = int(persona_id_str.strip())
+        except ValueError:
+            logger.warning(f"❌ Invalid persona ID format: {persona_id_str}")
+            gr.Warning(f"Invalid persona ID format: {persona_id_str} ⚠️", duration=3)
+            return (gr.Dataframe(value=load_personas_data()), "", "", "")
+
+        # Validate persona ID exists
+        if not validate_persona_id_exists(persona_id):
+            logger.warning(f"❌ Persona ID {persona_id} not found")
+            gr.Warning(
+                f"Persona with ID {persona_id} not found in the current list ⚠️",
+                duration=4,
+            )
+            return (gr.Dataframe(value=load_personas_data()), "", "", "")
+
+        # Get the persona
+        from ..managers.persona_repository import get_persona_by_id
+
+        persona = get_persona_by_id(persona_id)
+
+        if persona:
+            logger.info(f"✅ Successfully loaded persona: {persona.name}")
+
+            # Return with form fields populated including the ID
+            return (
+                gr.Dataframe(value=load_personas_data()),
+                str(persona.id),  # Populate ID field
+                persona.name,  # Populate name field
+                persona.description or "",  # Populate description field
+            )
+        else:
+            logger.warning(f"❌ Persona with ID {persona_id} returned None")
+            gr.Warning(
+                f"Persona with ID {persona_id} could not be loaded ⚠️", duration=4
+            )
+            return (gr.Dataframe(value=load_personas_data()), "", "", "")
+
+    except PersonaRepositoryError as e:
+        logger.error(f"❌ Database error: {str(e)}")
+        gr.Warning(f"Database error: {str(e)} 💥!", duration=5)
+        return (gr.Dataframe(value=load_personas_data()), "", "", "")
+    except Exception as e:
+        logger.error(f"❌ Unexpected error loading persona: {str(e)}", exc_info=True)
+        gr.Warning(f"Unexpected error loading persona: {str(e)} 💥!", duration=5)
+        return (gr.Dataframe(value=load_personas_data()), "", "", "")

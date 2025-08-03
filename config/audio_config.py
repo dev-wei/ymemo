@@ -129,8 +129,8 @@ class AudioSystemConfig:
         sample_rate = QUALITY_SAMPLE_RATE_MAP.get(
             audio_quality,
             cls._safe_int(
-                os.getenv('AUDIO_SAMPLE_RATE', str(SAMPLE_RATE_AVERAGE)),
-                SAMPLE_RATE_AVERAGE,
+                os.getenv('AUDIO_SAMPLE_RATE', str(SAMPLE_RATE_HIGH)),
+                SAMPLE_RATE_HIGH,
             ),
         )
 

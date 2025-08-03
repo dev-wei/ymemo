@@ -47,8 +47,9 @@ from .meeting_handlers import (
     submit_new_meeting,
 )
 from .persona_handlers import (
+    create_persona_from_id,
     delete_persona_by_id_input,
-    load_personas_data,
+    load_persona_by_id,
     refresh_personas,
     submit_new_persona,
 )
@@ -374,18 +375,18 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
 
         # Sidebar - Hidden by default, collapsible
         (
-            sidebar,
-            sidebar_theme_dropdown,
+            _,  # sidebar
+            _,  # sidebar_theme_dropdown
             sidebar_audio_quality_dropdown,
             sidebar_audio_quality_info,
             sidebar_language_dropdown,
             sidebar_language_info,
             sidebar_provider_dropdown,
             sidebar_provider_info,
-            sidebar_connection_status,
-            sidebar_session_duration,
-            sidebar_audio_level,
-            sidebar_memory_usage,
+            _,  # sidebar_connection_status
+            _,  # sidebar_session_duration
+            _,  # sidebar_audio_level
+            _,  # sidebar_memory_usage
         ) = create_sidebar()
 
         # Tabbed interface structure
@@ -436,57 +437,73 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                     persona_list = gr.Dataframe(
                         headers=["ID", "Name", "Description", "Created", "Updated"],
                         datatype=["number", "str", "str", "str", "str"],
-                        value=load_personas_data(),  # Load initial persona data
+                        value=[],  # Start with empty data to avoid loading errors
                         interactive=False,
-                        show_search="search",
+                        show_search=False,  # Disable search to avoid potential issues
                         show_fullscreen_button=True,
                         show_copy_button=True,
                         show_row_numbers=True,
                         wrap=True,
                     )
 
-                # Delete section for personas
+                # Operation section for personas
                 with gr.Column(elem_classes=["delete-controls-section"]):
                     with gr.Row():
                         persona_id_input = gr.Textbox(
-                            label="Persona ID to Delete",
+                            label="Persona ID to Operate",
                             placeholder="Enter persona ID (e.g., 1, 2, 3)",
-                            scale=3,
+                            scale=2,
+                            show_label=True,
+                            container=True,
+                        )
+                        create_persona_btn = gr.Button(
+                            "➕ Create New Persona",
+                            variant="primary",
+                            scale=1,
+                            size="sm",
+                        )
+                        load_persona_btn = gr.Button(
+                            "📋 Load Persona", variant="secondary", scale=1, size="sm"
                         )
                         delete_persona_btn = gr.Button(
                             "🗑️ Delete Persona", variant="stop", scale=1, size="sm"
                         )
 
-                    # Status message for persona delete operations
-                    delete_persona_status = gr.HTML(
-                        value="💡 Enter a persona ID from the table above and click Delete",
-                        visible=True,
+                    # Help text for persona operations
+                    gr.Markdown(
+                        "💡 Enter a persona ID from the table above and choose an operation"
                     )
 
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### Create New Persona")
+                    persona_id_field = gr.Textbox(
+                        label="Persona ID",
+                        placeholder="Auto-generated for new personas",
+                        value="",
+                        interactive=False,  # Make it readonly
+                        show_label=True,
+                        container=True,
+                    )
                     persona_name = gr.Textbox(
                         label="Persona Name",
                         placeholder="Enter persona name (e.g., 'Professional Meeting', 'Creative Brainstorm')",
+                        show_label=True,
+                        container=True,
                     )
                     persona_description = gr.Textbox(
                         label="Description",
                         placeholder="Describe this persona's purpose and use case",
                         lines=3,
+                        show_label=True,
+                        container=True,
                     )
 
             with gr.Row():
                 save_persona_btn = gr.Button("Save Persona", variant="primary")
                 refresh_personas_btn = gr.Button("Refresh List", variant="secondary")
 
-            persona_status = gr.HTML(
-                value="Ready to create your first persona profile."
-            )
-
-        # Status message component for user feedback (placed near save button)
-        with gr.Row():
-            save_status_message = gr.HTML(visible=False)
+            gr.Markdown("Ready to create your first persona profile.")
 
         # Get audio session manager
         audio_session = get_audio_session()
@@ -590,11 +607,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
         save_meeting_btn.click(
             fn=submit_new_meeting,
             inputs=[meeting_name_field, duration_field, dialog_output],
-            outputs=[save_status_message, meeting_list],
-        ).then(
-            # Show the status message after submission
-            fn=lambda: gr.update(visible=True),
-            outputs=[save_status_message],
+            outputs=[meeting_list],
         )
 
         # Simple ID-based delete functionality
@@ -611,27 +624,51 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
         # Persona management event handlers
         save_persona_btn.click(
             fn=submit_new_persona,
-            inputs=[persona_name, persona_description],
-            outputs=[persona_status, persona_list],
+            inputs=[persona_id_field, persona_name, persona_description],
+            outputs=[persona_list],
         ).then(
             # Clear the form after successful submission
-            fn=lambda: ("", ""),
-            outputs=[persona_name, persona_description],
+            fn=lambda: ("", "", ""),
+            outputs=[persona_id_field, persona_name, persona_description],
         )
 
         # Persona deletion handler
         delete_persona_btn.click(
             fn=delete_persona_by_id_input,
             inputs=[persona_id_input],
-            outputs=[persona_list, delete_persona_status],
+            outputs=[persona_list],
         ).then(
             # Clear the input field after operation
             fn=lambda: "",
             outputs=[persona_id_input],
         )
 
+        # Create new persona handler
+        create_persona_btn.click(
+            fn=create_persona_from_id,
+            inputs=[persona_id_input],
+            outputs=[persona_list, persona_id_field, persona_name, persona_description],
+        ).then(
+            # Clear the input field after operation
+            fn=lambda: "",
+            outputs=[persona_id_input],
+        )
+
+        # Load persona handler
+        load_persona_btn.click(
+            fn=load_persona_by_id,
+            inputs=[persona_id_input],
+            outputs=[persona_list, persona_id_field, persona_name, persona_description],
+        )
+
         # Persona refresh handler
         refresh_personas_btn.click(
+            fn=refresh_personas,
+            outputs=[persona_list],
+        )
+
+        # Load personas on interface start
+        demo.load(
             fn=refresh_personas,
             outputs=[persona_list],
         )
