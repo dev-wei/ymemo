@@ -240,7 +240,7 @@ class TestEnhancedAudioSessionManager(BaseIntegrationTest):
     @pytest.mark.integration
     @patch("src.core.processor.AudioProcessor")
     @patch("threading.Thread")
-    @patch("config.audio_config.get_config")
+    @patch("src.config.audio_config.get_config")
     def test_start_recording_success(
         self,
         mock_get_config,
