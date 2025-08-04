@@ -286,6 +286,15 @@ class DualChannelAudioSaver:
         # Create directory if needed
         self.save_path.mkdir(parents=True, exist_ok=True)
 
+        # Log important warning about dual channel audio saving
+        logger.warning("🎵 DualChannelAudioSaver: CREATING LEFT/RIGHT CHANNEL FILES")
+        logger.warning(
+            "   ⚠️ This component should ONLY be used when processing stereo input that needs to be split!"
+        )
+        logger.warning(
+            "   💡 If you're seeing this for mono input, there's a configuration error upstream"
+        )
+
         # Generate timestamp-based filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         left_file = self.save_path / f"left_channel_{timestamp}.wav"
@@ -304,11 +313,19 @@ class DualChannelAudioSaver:
         logger.info("🎵 DualChannelAudioSaver: Initialized")
         logger.info(f"   📁 Left: {left_file}")
         logger.info(f"   📁 Right: {right_file}")
+        logger.info(
+            "   🎯 Expected usage: Stereo audio input that has been split into separate left/right channels"
+        )
 
     def start_recording(self) -> bool:
         """Start recording both channels."""
         if self.is_active:
             return True
+
+        logger.info("🎵 DualChannelAudioSaver: Starting dual channel recording")
+        logger.info(
+            "   💡 This will create LEFT and RIGHT channel WAV files - ensure input is stereo!"
+        )
 
         left_started = self.left_writer.start_recording()
         right_started = self.right_writer.start_recording()
@@ -316,7 +333,11 @@ class DualChannelAudioSaver:
         if left_started and right_started:
             self.is_active = True
             logger.info("🎵 DualChannelAudioSaver: Both channels recording started")
+            logger.info(
+                "   📁 Recording to 2 separate files (left_channel_*.wav and right_channel_*.wav)"
+            )
             return True
+
         logger.error("❌ DualChannelAudioSaver: Failed to start recording")
         # Clean up any successful starts
         if left_started:

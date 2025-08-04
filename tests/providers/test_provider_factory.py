@@ -381,7 +381,7 @@ class TestConvenienceFunctions(BaseIntegrationTest):
     """Test convenience functions using integration test patterns."""
 
     @pytest.mark.integration
-    @patch("config.audio_config.get_config")
+    @patch("src.config.audio_config.get_config")
     @patch("boto3.Session")
     def test_create_aws_transcribe_provider(
         self, mock_boto3, mock_get_config, aws_mock_setup

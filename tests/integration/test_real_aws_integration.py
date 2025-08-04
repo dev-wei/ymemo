@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from config.audio_config import get_config
+from src.config.audio_config import get_config
 from src.core.interfaces import AudioConfig
 from tests.base.base_test import BaseIntegrationTest
 
@@ -24,12 +24,11 @@ class TestRealAWSIntegration(BaseIntegrationTest):
         """Set up AWS test environment."""
         test_env = {
             "LOG_LEVEL": "DEBUG",
-            "AWS_CONNECTION_STRATEGY": "dual",
-            "AWS_DUAL_CONNECTION_TEST_MODE": "left_only",
-            "AWS_DUAL_SAVE_SPLIT_AUDIO": "true",
-            "AWS_DUAL_SAVE_RAW_AUDIO": "true",
-            "AWS_DUAL_AUDIO_SAVE_PATH": "./debug_audio/",
-            "AWS_DUAL_AUDIO_SAVE_DURATION": "20",
+            # Use new provider-agnostic variables
+            "SAVE_RAW_AUDIO": "true",
+            "SAVE_SPLIT_AUDIO": "true",
+            "AUDIO_SAVE_PATH": "./debug_audio/",
+            "AUDIO_SAVE_DURATION": "20",
         }
 
         with patch.dict(os.environ, test_env):
@@ -47,13 +46,10 @@ class TestRealAWSIntegration(BaseIntegrationTest):
         config = get_config()
         transcription_config = config.get_transcription_config()
 
-        # Verify configuration values
-        assert transcription_config["connection_strategy"] == "dual"
-        assert transcription_config["dual_connection_test_mode"] == "left_only"
-        assert transcription_config["dual_save_split_audio"] is True
-        assert transcription_config["dual_save_raw_audio"] is True
-        assert transcription_config["dual_audio_save_path"] == "./debug_audio/"
-        assert transcription_config["dual_audio_save_duration"] == 20
+        # Verify core AWS configuration values
+        assert transcription_config["region"] == "us-east-1"
+        assert transcription_config["language_code"] == "en-US"
+        assert transcription_config["dual_fallback_enabled"] is True
 
     @patch("src.audio.providers.aws_transcribe.boto3")
     def test_aws_provider_with_real_configuration(
@@ -77,11 +73,11 @@ class TestRealAWSIntegration(BaseIntegrationTest):
         # Verify provider was created with correct settings
         assert aws_provider is not None
         assert hasattr(aws_provider, "connection_strategy")
-        assert aws_provider.connection_strategy == "dual"
-        assert hasattr(aws_provider, "dual_connection_test_mode")
-        assert aws_provider.dual_connection_test_mode == "left_only"
-        assert hasattr(aws_provider, "dual_save_split_audio")
-        assert aws_provider.dual_save_split_audio is True
+        assert aws_provider.connection_strategy in [
+            "auto",
+            "dual",
+        ]  # Auto-detected or dual
+        # Note: dual_save_split_audio parameter removed - audio saving handled at pipeline level
 
     @patch("src.audio.providers.aws_transcribe.boto3")
     def test_audio_config_compatibility(self, mock_boto3, aws_test_environment):
@@ -124,24 +120,17 @@ class TestRealAWSIntegration(BaseIntegrationTest):
             transcription_config = config.get_transcription_config()
             assert "region" in transcription_config
             assert "language_code" in transcription_config
-            assert "connection_strategy" in transcription_config
+            assert "dual_fallback_enabled" in transcription_config
 
     def test_configuration_precedence(self, aws_test_environment):
         """Test that environment variables take precedence over defaults."""
         config = get_config()
 
-        # Environment values should override defaults
-        assert config.aws_connection_strategy == "dual"  # From environment
-        assert config.aws_dual_connection_test_mode == "left_only"  # From environment
-        assert config.aws_dual_save_split_audio is True  # From environment
-
-        # Test with different environment values
-        with patch.dict(os.environ, {"AWS_CONNECTION_STRATEGY": "single"}):
-            new_config = get_config()
-            # Note: Depending on caching implementation, this might not change immediately
-            # This test verifies the mechanism works
-            transcription_config = new_config.get_transcription_config()
-            assert "connection_strategy" in transcription_config
+        # Environment values should override defaults for new provider-agnostic config
+        assert config.save_raw_audio is True  # From environment
+        assert config.save_split_audio is True  # From environment
+        assert config.audio_save_path == "./debug_audio/"  # From environment
+        assert config.audio_save_duration == 20  # From environment
 
 
 class TestRealApplicationScenarios(BaseIntegrationTest):
@@ -160,7 +149,7 @@ class TestRealApplicationScenarios(BaseIntegrationTest):
         # Set up test environment
         with patch.dict(
             os.environ,
-            {"AWS_CONNECTION_STRATEGY": "dual", "AWS_DUAL_SAVE_SPLIT_AUDIO": "true"},
+            {"SAVE_SPLIT_AUDIO": "true"},
         ):
             # Replicate session_manager.py approach
             from src.core.processor import AudioProcessor
@@ -181,17 +170,17 @@ class TestRealApplicationScenarios(BaseIntegrationTest):
     def test_configuration_error_handling(self):
         """Test handling of configuration errors."""
         # Test with invalid boolean values
-        with patch.dict(os.environ, {"AWS_DUAL_SAVE_SPLIT_AUDIO": "invalid"}):
+        with patch.dict(os.environ, {"SAVE_SPLIT_AUDIO": "invalid"}):
             config = get_config()
             # Should handle invalid boolean gracefully
-            assert isinstance(config.aws_dual_save_split_audio, bool)
+            assert isinstance(config.save_split_audio, bool)
 
         # Test with invalid numeric values
-        with patch.dict(os.environ, {"AWS_DUAL_AUDIO_SAVE_DURATION": "not_a_number"}):
+        with patch.dict(os.environ, {"AUDIO_SAVE_DURATION": "not_a_number"}):
             config = get_config()
             # Should handle invalid number gracefully
-            assert isinstance(config.aws_dual_audio_save_duration, int)
-            assert config.aws_dual_audio_save_duration > 0
+            assert isinstance(config.audio_save_duration, int)
+            assert config.audio_save_duration > 0
 
     @patch("src.audio.providers.aws_transcribe.boto3")
     def test_provider_error_handling_in_real_scenario(self, mock_boto3):
@@ -222,11 +211,8 @@ class TestRealApplicationScenarios(BaseIntegrationTest):
         ]
 
         for test_path in test_paths:
-            with patch.dict(os.environ, {"AWS_DUAL_AUDIO_SAVE_PATH": test_path}):
+            with patch.dict(os.environ, {"AUDIO_SAVE_PATH": test_path}):
                 config = get_config()
 
-                # Should accept various path formats
-                assert config.aws_dual_audio_save_path == test_path
-
-                transcription_config = config.get_transcription_config()
-                assert transcription_config["dual_audio_save_path"] == test_path
+                # Should accept various path formats for provider-agnostic audio saving
+                assert config.audio_save_path == test_path

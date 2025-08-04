@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from config.audio_config import (
+from src.config.audio_config import (
     QUALITY_DISPLAY_AVERAGE,
     QUALITY_DISPLAY_HIGH,
     get_audio_quality_choices,

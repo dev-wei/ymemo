@@ -4,7 +4,7 @@ import logging
 
 import gradio as gr
 
-from config.audio_config import get_audio_quality_choices, get_default_audio_quality
+from src.config.audio_config import get_audio_quality_choices, get_default_audio_quality
 from src.config.language_config import get_default_language, get_language_choices
 from src.config.provider_config import (
     get_current_provider_from_env,

@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # Import the functions we want to test
-from config.audio_config import (
+from src.config.audio_config import (
     QUALITY_DISPLAY_AVERAGE,
     QUALITY_DISPLAY_HIGH,
     SAMPLE_RATE_AVERAGE,
@@ -79,7 +79,7 @@ class TestAudioQualityConfig(BaseTest):
         rate_invalid = get_sample_rate_from_quality("invalid")
         assert rate_invalid == SAMPLE_RATE_AVERAGE
 
-    @patch('config.audio_config.get_config')
+    @patch('src.config.audio_config.get_config')
     def test_get_current_audio_quality_info(self, mock_get_config):
         """Test current quality info generation."""
         # Mock config with high quality

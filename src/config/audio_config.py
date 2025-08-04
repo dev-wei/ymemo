@@ -52,21 +52,19 @@ class AudioSystemConfig:
     aws_language_code: str = 'en-US'
     aws_max_speakers: int = 10
 
-    # AWS Connection Strategy settings
-    aws_connection_strategy: str = 'auto'  # 'auto', 'single', 'dual'
+    # AWS Connection Strategy: Now automatically determined based on device channels
+    # - 1 channel device → Single AWS connection
+    # - 2+ channel device → Dual AWS connections
     aws_dual_fallback_enabled: bool = True
     aws_channel_balance_threshold: float = (
         0.3  # Threshold for detecting severe channel imbalance
     )
 
-    # AWS Dual Connection Test Mode settings
-    aws_dual_connection_test_mode: str = 'full'  # 'left_only', 'right_only', 'full'
-
-    # AWS Dual Connection Audio Saving settings (for debugging)
-    aws_dual_save_split_audio: bool = False
-    aws_dual_save_raw_audio: bool = False  # Save raw PyAudio input before splitting
-    aws_dual_audio_save_path: str = './debug_audio/'
-    aws_dual_audio_save_duration: int = 30  # seconds
+    # General Audio Saving settings (provider-agnostic)
+    save_raw_audio: bool = False  # Save raw audio input to WAV file
+    save_split_audio: bool = False  # Save left/right channels separately (stereo only)
+    audio_save_path: str = './debug_audio/'  # Directory to save audio files
+    audio_save_duration: int = 30  # Maximum recording duration in seconds
 
     # Azure Speech Service settings
     azure_speech_key: str = ''
@@ -115,7 +113,7 @@ class AudioSystemConfig:
             return default
 
     @classmethod
-    def _safe_bool(cls, value: str) -> bool:
+    def _safe_bool(cls, value: str | None) -> bool:
         """Safely parse boolean value."""
         if value is None:
             return False
@@ -134,37 +132,36 @@ class AudioSystemConfig:
             ),
         )
 
+        # Show informational message if user still has deprecated AWS_CONNECTION_STRATEGY
+        if 'AWS_CONNECTION_STRATEGY' in os.environ:
+            logger.warning(
+                "⚠️ AWS_CONNECTION_STRATEGY is no longer supported and will be ignored. "
+                "Connection strategy is now automatically determined based on device channels: "
+                "1 channel = single connection, 2+ channels = dual connections."
+            )
+
         return cls(
             transcription_provider=os.getenv('TRANSCRIPTION_PROVIDER', 'aws'),
             capture_provider=os.getenv('CAPTURE_PROVIDER', 'pyaudio'),
             sample_rate=sample_rate,
-            channels=cls._safe_int(os.getenv('AUDIO_CHANNELS', '1'), 1),
+            channels=1,  # Default fallback - actual channels determined by device detection
             chunk_size=cls._safe_int(os.getenv('AUDIO_CHUNK_SIZE', '1024'), 1024),
             audio_format=os.getenv('AUDIO_FORMAT', 'int16'),
             aws_region=os.getenv('AWS_REGION', 'us-east-1'),
             aws_language_code=os.getenv('AWS_LANGUAGE_CODE', 'en-US'),
             aws_max_speakers=cls._safe_int(os.getenv('AWS_MAX_SPEAKERS', '10'), 10),
-            aws_connection_strategy=os.getenv('AWS_CONNECTION_STRATEGY', 'auto'),
             aws_dual_fallback_enabled=cls._safe_bool(
                 os.getenv('AWS_DUAL_FALLBACK_ENABLED', 'true')
             ),
             aws_channel_balance_threshold=cls._safe_float(
                 os.getenv('AWS_CHANNEL_BALANCE_THRESHOLD', '0.3'), 0.3
             ),
-            aws_dual_connection_test_mode=os.getenv(
-                'AWS_DUAL_CONNECTION_TEST_MODE', 'full'
-            ),
-            aws_dual_save_split_audio=cls._safe_bool(
-                os.getenv('AWS_DUAL_SAVE_SPLIT_AUDIO', 'false')
-            ),
-            aws_dual_save_raw_audio=cls._safe_bool(
-                os.getenv('AWS_DUAL_SAVE_RAW_AUDIO', 'false')
-            ),
-            aws_dual_audio_save_path=os.getenv(
-                'AWS_DUAL_AUDIO_SAVE_PATH', './debug_audio/'
-            ),
-            aws_dual_audio_save_duration=cls._safe_int(
-                os.getenv('AWS_DUAL_AUDIO_SAVE_DURATION', '30'), 30
+            # General audio saving settings (provider-agnostic)
+            save_raw_audio=cls._safe_bool(os.getenv('SAVE_RAW_AUDIO', 'false')),
+            save_split_audio=cls._safe_bool(os.getenv('SAVE_SPLIT_AUDIO', 'false')),
+            audio_save_path=os.getenv('AUDIO_SAVE_PATH', './debug_audio/'),
+            audio_save_duration=cls._safe_int(
+                os.getenv('AUDIO_SAVE_DURATION', '30'), 30
             ),
             azure_speech_key=os.getenv('AZURE_SPEECH_KEY', ''),
             azure_speech_region=os.getenv('AZURE_SPEECH_REGION', 'eastus'),
@@ -196,14 +193,10 @@ class AudioSystemConfig:
             return {
                 'region': self.aws_region,
                 'language_code': self.aws_language_code,
-                'connection_strategy': self.aws_connection_strategy,
+                # Note: connection_strategy removed - now auto-detected based on device channels
                 'dual_fallback_enabled': self.aws_dual_fallback_enabled,
                 'channel_balance_threshold': self.aws_channel_balance_threshold,
-                'dual_connection_test_mode': self.aws_dual_connection_test_mode,
-                'dual_save_split_audio': self.aws_dual_save_split_audio,
-                'dual_save_raw_audio': self.aws_dual_save_raw_audio,
-                'dual_audio_save_path': self.aws_dual_audio_save_path,
-                'dual_audio_save_duration': self.aws_dual_audio_save_duration,
+                # NOTE: Audio saving is now handled at pipeline level by AudioSaver component
             }
         if self.transcription_provider == 'azure':
             return {
@@ -231,6 +224,15 @@ class AudioSystemConfig:
         """Get configuration for audio capture provider."""
         return {
             # PyAudio or other capture providers may need specific config
+        }
+
+    def get_audio_saving_config(self) -> dict[str, Any]:
+        """Get configuration for audio saving component."""
+        return {
+            'enabled': self.save_raw_audio,
+            'save_split_audio': self.save_split_audio,
+            'save_path': self.audio_save_path,
+            'max_duration': self.audio_save_duration,
         }
 
     def get_audio_config(self) -> 'AudioConfig':
@@ -290,6 +292,19 @@ class AudioSystemConfig:
                 channels=preferred_channels,
                 sample_rate=self.sample_rate,
             )
+
+            # Log device sample rate compatibility for audio debugging
+            device_default_rate = validation_result.get('device_default_sample_rate')
+            if device_default_rate:
+                logger.info(f"🔍 AudioConfig: Device sample rate analysis:")
+                logger.info(f"   🎚️ System requests: {self.sample_rate}Hz")
+                logger.info(f"   🎛️ Device default: {device_default_rate}Hz")
+                if abs(self.sample_rate - device_default_rate) > 1000:
+                    logger.warning(
+                        f"   ⚠️ Large mismatch may cause audio quality issues!"
+                    )
+                else:
+                    logger.info(f"   ✅ Sample rates are compatible")
 
             # Log device information and warnings
             device_info = validation_result.get('device_info', {})
@@ -379,39 +394,6 @@ class AudioSystemConfig:
                     "AWS language code is required when using AWS transcription provider"
                 )
 
-            # Validate AWS connection strategy
-            valid_strategies = ['auto', 'single', 'dual']
-            if self.aws_connection_strategy not in valid_strategies:
-                errors.append(
-                    f"Invalid aws_connection_strategy '{self.aws_connection_strategy}'. "
-                    f"Valid options: {', '.join(valid_strategies)}"
-                )
-
-            # Validate AWS dual connection test mode
-            valid_test_modes = ['left_only', 'right_only', 'full']
-            if self.aws_dual_connection_test_mode not in valid_test_modes:
-                errors.append(
-                    f"Invalid aws_dual_connection_test_mode '{self.aws_dual_connection_test_mode}'. "
-                    f"Valid options: {', '.join(valid_test_modes)}"
-                )
-
-            # Validate audio saving settings
-            if not isinstance(self.aws_dual_save_split_audio, bool):
-                errors.append("aws_dual_save_split_audio must be a boolean")
-
-            if not isinstance(self.aws_dual_save_raw_audio, bool):
-                errors.append("aws_dual_save_raw_audio must be a boolean")
-
-            if self.aws_dual_audio_save_duration <= 0:
-                errors.append(
-                    f"aws_dual_audio_save_duration must be positive, got {self.aws_dual_audio_save_duration}"
-                )
-
-            if not self.aws_dual_audio_save_path or not isinstance(
-                self.aws_dual_audio_save_path, str
-            ):
-                errors.append("aws_dual_audio_save_path must be a non-empty string")
-
             # Validate channel balance threshold
             if not (0.0 <= self.aws_channel_balance_threshold <= 1.0):
                 errors.append(
@@ -419,6 +401,21 @@ class AudioSystemConfig:
                 )
 
             # Note: AWS provider now handles both single and dual connections automatically
+
+        # Validate general audio saving settings
+        if not isinstance(self.save_raw_audio, bool):
+            errors.append("save_raw_audio must be a boolean")
+
+        if not isinstance(self.save_split_audio, bool):
+            errors.append("save_split_audio must be a boolean")
+
+        if self.audio_save_duration <= 0:
+            errors.append(
+                f"audio_save_duration must be positive, got {self.audio_save_duration}"
+            )
+
+        if not self.audio_save_path or not isinstance(self.audio_save_path, str):
+            errors.append("audio_save_path must be a non-empty string")
 
         # Validate Azure settings if using Azure
         if self.transcription_provider == 'azure':
@@ -493,38 +490,35 @@ def get_config() -> AudioSystemConfig:
     logger.info(f"  - Capture Provider: {config.capture_provider}")
     logger.info(f"  - AWS Region: {config.aws_region}")
     logger.info(f"  - AWS Language: {config.aws_language_code}")
-    logger.info(f"  - AWS Connection Strategy: {config.aws_connection_strategy}")
-    logger.info(f"  - AWS Dual Test Mode: {config.aws_dual_connection_test_mode}")
+    logger.info(f"  - AWS Connection Strategy: auto-detected based on device channels")
 
-    # Enhanced audio saving configuration logging
-    if config.aws_dual_save_split_audio or config.aws_dual_save_raw_audio:
-        logger.info("  - AWS Audio Saving: ✅ ENABLED")
-        logger.info(f"    📁 Save Path: {config.aws_dual_audio_save_path}")
-        logger.info(f"    ⏱️  Save Duration: {config.aws_dual_audio_save_duration}s")
-        if config.aws_dual_save_split_audio:
-            logger.info("    🔀 Split audio saving: ✅ ENABLED")
-        if config.aws_dual_save_raw_audio:
-            logger.info("    🎵 Raw audio saving: ✅ ENABLED")
+    # General audio saving configuration logging
+    if config.save_raw_audio or config.save_split_audio:
+        logger.info("  - Audio Saving: ✅ ENABLED")
+        logger.info(f"    📁 Save Path: {config.audio_save_path}")
+        logger.info(f"    ⏱️  Save Duration: {config.audio_save_duration}s")
+
+        if config.save_raw_audio:
+            logger.info("    🎵 Raw audio saving: ✅ ENABLED (provider-agnostic)")
+
+        if config.save_split_audio:
+            logger.info("    🔀 Split audio saving: ✅ ENABLED (provider-agnostic)")
 
         # Validate directory exists
         import os
 
-        if not os.path.exists(config.aws_dual_audio_save_path):
+        if not os.path.exists(config.audio_save_path):
             logger.warning(
-                f"    ⚠️  Save directory does not exist: {config.aws_dual_audio_save_path}"
+                f"    ⚠️  Save directory does not exist: {config.audio_save_path}"
             )
             try:
-                os.makedirs(config.aws_dual_audio_save_path, exist_ok=True)
-                logger.info(
-                    f"    📁 Created save directory: {config.aws_dual_audio_save_path}"
-                )
+                os.makedirs(config.audio_save_path, exist_ok=True)
+                logger.info(f"    📁 Created save directory: {config.audio_save_path}")
             except Exception as e:
                 logger.error(f"    ❌ Failed to create save directory: {e}")
     else:
-        logger.info("  - AWS Audio Saving: ❌ DISABLED")
-        logger.info(
-            "    💡 To enable: set AWS_DUAL_SAVE_SPLIT_AUDIO=true or AWS_DUAL_SAVE_RAW_AUDIO=true"
-        )
+        logger.info("  - Audio Saving: ❌ DISABLED")
+        logger.info("    💡 To enable: set SAVE_RAW_AUDIO=true")
 
     logger.info(
         f"  - Audio Format: {config.sample_rate}Hz, {config.channels}ch, {config.audio_format}"
@@ -554,16 +548,20 @@ def print_config_summary() -> None:
     print("AWS Configuration:")
     print(f"  - Region: {config.aws_region}")
     print(f"  - Language: {config.aws_language_code}")
-    print(f"  - Connection Strategy: {config.aws_connection_strategy}")
-    print(f"  - Dual Connection Test Mode: {config.aws_dual_connection_test_mode}")
-    if config.aws_dual_save_split_audio or config.aws_dual_save_raw_audio:
+    print(f"  - Connection Strategy: auto-detected based on device channels")
+    print("")
+    print("Audio Saving Configuration:")
+    if config.save_raw_audio:
         print(
-            f"  - Audio Saving: ENABLED (path: {config.aws_dual_audio_save_path}, duration: {config.aws_dual_audio_save_duration}s)"
+            f"  - Raw Audio Saving: ENABLED (path: {config.audio_save_path}, duration: {config.audio_save_duration}s)"
         )
-        if config.aws_dual_save_split_audio:
-            print("    - Split audio: ENABLED")
-        if config.aws_dual_save_raw_audio:
-            print("    - Raw audio: ENABLED")
+    else:
+        print("  - Raw Audio Saving: DISABLED")
+
+    if config.save_split_audio:
+        print(f"  - Split Audio Saving: ENABLED (stereo channels saved separately)")
+    else:
+        print("  - Split Audio Saving: DISABLED")
     print("")
     print("Performance Settings:")
     print(f"  - Max Latency: {config.max_latency_ms} ms")

@@ -47,7 +47,7 @@ def _check_aws_status(provider_key: str) -> 'ProviderStatusInfo':
                 )
 
             # Check if transcribe service is accessible
-            region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+            region = os.environ.get('AWS_REGION', 'us-east-1')
             transcribe_client = session.client('transcribe', region_name=region)
 
             # Try to list transcription jobs (this validates permissions)

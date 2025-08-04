@@ -144,7 +144,7 @@ source .venv/bin/activate && python -c "from src.utils.database import test_data
 
 **Centralized Configuration System:**
 
-- All configuration is managed through `config/audio_config.py`
+- All configuration is managed through `src/config/audio_config.py`
 - Configuration is loaded from environment variables with sensible defaults
 - Automatic validation with helpful error messages
 - Debug logging shows loaded configuration values
@@ -154,16 +154,17 @@ source .venv/bin/activate && python -c "from src.utils.database import test_data
 *Provider Selection:*
 
 - `TRANSCRIPTION_PROVIDER` - Choose transcription provider ('aws', 'azure', 'whisper', 'google', default: 'aws')
-  - `aws` provider now intelligently switches between single and dual connections automatically
+  - `aws` provider automatically detects device channels and chooses optimal connection strategy
 - `CAPTURE_PROVIDER` - Choose audio capture provider ('pyaudio', 'file', default: 'pyaudio')
 
 *Audio Settings:*
 
 - `AUDIO_QUALITY` - Audio quality preset ('high' for 44,100 Hz CD-quality, 'average' for 16,000 Hz speech-optimized, default: not set)
 - `AUDIO_SAMPLE_RATE` - Sample rate in Hz (default: 16000, overridden by AUDIO_QUALITY if set)
-- `AUDIO_CHANNELS` - Number of audio channels (default: 1)
 - `AUDIO_CHUNK_SIZE` - Audio chunk size (default: 1024)
 - `AUDIO_FORMAT` - Audio format ('int16', 'int24', 'int32', 'float32', default: 'int16')
+
+**Note:** Number of audio channels is automatically detected based on the selected input device capabilities.
 
 *AWS Configuration:*
 
@@ -174,7 +175,9 @@ source .venv/bin/activate && python -c "from src.utils.database import test_data
 
 *AWS Connection Strategy:*
 
-- `AWS_CONNECTION_STRATEGY` - Connection mode ('auto', 'single', 'dual', default: 'auto')
+- Connection strategy is now **automatically determined** based on device channels:
+  - 1-channel device → Single AWS Transcribe connection
+  - 2+ channel device → Dual AWS Transcribe connections for optimal transcription
 - `AWS_DUAL_FALLBACK_ENABLED` - Enable fallback to dual connections (true/false, default: true)  
 - `AWS_CHANNEL_BALANCE_THRESHOLD` - Channel imbalance threshold for fallback (0.0-1.0, default: 0.3)
 
@@ -192,7 +195,7 @@ source .venv/bin/activate && python -c "from src.utils.database import test_data
 **Configuration Debugging:**
 
 ```python
-from config.audio_config import print_config_summary
+from src.config.audio_config import print_config_summary
 print_config_summary()  # Shows current configuration
 ```
 

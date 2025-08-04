@@ -414,10 +414,22 @@ def validate_device_config(
 
         # Validate sample rate
         device_sample_rate = int(device.default_sample_rate)
+        logger.info(f"🎚️ Device {device_index} sample rate validation:")
+        logger.info(f"   📊 System config requests: {sample_rate}Hz")
+        logger.info(f"   🎛️ Device default supports: {device_sample_rate}Hz")
+
         if sample_rate != device_sample_rate:
+            logger.warning(
+                f"⚠️ Sample rate mismatch - using requested {sample_rate}Hz instead of device default {device_sample_rate}Hz"
+            )
             warnings.append(
                 f"Requested sample rate {sample_rate}Hz differs from device default {device_sample_rate}Hz"
             )
+            logger.warning(
+                "   💡 This could cause audio quality issues or speed/pitch problems"
+            )
+        else:
+            logger.info("✅ Sample rate matches device default - optimal compatibility")
 
         device_info = {
             "name": device.name,
@@ -427,10 +439,23 @@ def validate_device_config(
             "is_default": device.is_default_input,
         }
 
+        # Option: Use device default sample rate if it differs significantly from requested
+        # This could prevent audio corruption when devices have different defaults
+        final_sample_rate = sample_rate
+        if abs(sample_rate - device_sample_rate) > 1000:  # More than 1kHz difference
+            logger.warning(f"⚠️ Large sample rate difference detected!")
+            logger.warning(
+                f"   💡 Consider using device default {device_sample_rate}Hz for better compatibility"
+            )
+            logger.warning(
+                f"   🔧 Current: using requested {sample_rate}Hz (may cause audio issues)"
+            )
+
         return {
             "channels": optimal_channels,
-            "sample_rate": sample_rate,
+            "sample_rate": final_sample_rate,
             "device_info": device_info,
+            "device_default_sample_rate": device_sample_rate,  # Add this for debugging
             "warnings": warnings,
         }
 

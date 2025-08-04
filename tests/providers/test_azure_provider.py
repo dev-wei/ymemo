@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from config.audio_config import AudioSystemConfig, get_config
+from src.config.audio_config import AudioSystemConfig, get_config
 from src.core.factory import AudioProcessorFactory
 from src.core.interfaces import AudioConfig
 from tests.base.base_test import BaseTest

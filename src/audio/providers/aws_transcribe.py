@@ -426,10 +426,6 @@ class AWSTranscribeProvider(TranscriptionProvider):
         dual_fallback_enabled: bool = True,
         channel_balance_threshold: float = 0.3,
         dual_connection_test_mode: str = "full",
-        dual_save_split_audio: bool = False,
-        dual_save_raw_audio: bool = False,
-        dual_audio_save_path: str = "./debug_audio/",
-        dual_audio_save_duration: int = 30,
     ):
         """
         Initialize AWS Transcribe provider with intelligent connection strategy.
@@ -476,18 +472,6 @@ class AWSTranscribeProvider(TranscriptionProvider):
                 f"Invalid dual_connection_test_mode '{dual_connection_test_mode}'. Valid options: {valid_test_modes}"
             )
 
-        # Validate audio saving parameters
-        if not isinstance(dual_save_split_audio, bool):
-            raise ValueError("dual_save_split_audio must be a boolean")
-        if not isinstance(dual_save_raw_audio, bool):
-            raise ValueError("dual_save_raw_audio must be a boolean")
-        if dual_audio_save_duration <= 0:
-            raise ValueError(
-                f"dual_audio_save_duration must be positive, got {dual_audio_save_duration}"
-            )
-        if not dual_audio_save_path or not isinstance(dual_audio_save_path, str):
-            raise ValueError("dual_audio_save_path must be a non-empty string")
-
         # Store configuration
         self.region = region.strip()
         self.language_code = language_code.strip()
@@ -498,16 +482,9 @@ class AWSTranscribeProvider(TranscriptionProvider):
         self.dual_fallback_enabled = dual_fallback_enabled
         self.channel_balance_threshold = channel_balance_threshold
         self.dual_connection_test_mode = dual_connection_test_mode
-        self.dual_save_split_audio = dual_save_split_audio
-        self.dual_save_raw_audio = dual_save_raw_audio
-        self.dual_audio_save_path = dual_audio_save_path
-        self.dual_audio_save_duration = dual_audio_save_duration
         self._connection_mode = (
             None  # Will be set to 'single_connection' or 'dual_connection'
         )
-
-        # Raw audio saving components
-        self._raw_audio_saver = None
 
         # Initialize state
         self.client = None
@@ -526,14 +503,6 @@ class AWSTranscribeProvider(TranscriptionProvider):
         logger.info(
             f"🧪 AWS Transcribe: Dual connection test mode={self.dual_connection_test_mode}"
         )
-        if self.dual_save_split_audio or self.dual_save_raw_audio:
-            logger.info(
-                f"🎵 AWS Transcribe: Audio saving ENABLED (path: {self.dual_audio_save_path}, duration: {self.dual_audio_save_duration}s)"
-            )
-            if self.dual_save_split_audio:
-                logger.info("🎵 AWS Transcribe: Split audio saving enabled")
-            if self.dual_save_raw_audio:
-                logger.info("🎵 AWS Transcribe: Raw audio saving enabled")
 
         # Validate AWS configuration early (skip in test environment)
         # Use environment-first approach for maximum CI compatibility
@@ -690,19 +659,31 @@ class AWSTranscribeProvider(TranscriptionProvider):
         Args:
             audio_config: AudioConfig object with audio format information
         """
+        # Validate that input is actually stereo before initializing dual connection components
+        if audio_config.channels != 2:
+            error_msg = f"Dual connection components require stereo input (2 channels), got {audio_config.channels} channels"
+            logger.error(f"❌ AWS Dual Connection: {error_msg}")
+            raise ValueError(error_msg)
+
         if self._dual_connection_components is not None:
             logger.debug("🔧 AWS Dual Connection: Components already initialized")
             return
 
         logger.info("🏗️ AWS Dual Connection: Initializing dual connection components...")
+        logger.info(
+            f"✅ AWS Dual Connection: Validated stereo input - {audio_config.channels} channels"
+        )
 
-        # Create channel splitter for stereo audio processing with optional audio saving
-        enable_saving = getattr(self, "dual_save_split_audio", False)
-        save_path = getattr(self, "dual_audio_save_path", "./debug_audio/")
-        save_duration = getattr(self, "dual_audio_save_duration", 30)
+        # Create channel splitter for stereo audio processing (audio saving now handled at pipeline level)
+        enable_saving = False  # Audio saving moved to AudioSaver component
+        save_path = "./debug_audio/"  # Legacy path for backwards compatibility
+        save_duration = 30  # Legacy duration for backwards compatibility
 
         logger.info(
-            f"🔧 AWS Dual Connection: Channel splitter config - enable_saving={enable_saving}, path={save_path}, duration={save_duration}"
+            f"🔧 AWS Dual Connection: Channel splitter config - enable_split_saving={enable_saving}"
+        )
+        logger.info(
+            f"🔧 AWS Dual Connection: Audio saving disabled (handled by AudioSaver component at pipeline level)"
         )
 
         channel_splitter = AudioChannelSplitter(
@@ -2172,23 +2153,10 @@ class AWSTranscribeProvider(TranscriptionProvider):
             else:
                 logger.info("✅ AWS Dual Connection: FULL MODE - Both channels active")
 
-            # Initialize raw audio saving if enabled
-            if self.dual_save_raw_audio:
-                self._initialize_raw_audio_saving(audio_config)
-
-            # Log audio saving status
-            if self.dual_save_split_audio or self.dual_save_raw_audio:
-                logger.info("🎵 AWS Dual Connection: Audio saving is ENABLED")
-                logger.info(
-                    f"   📁 Files will be saved to: {self.dual_audio_save_path}"
-                )
-                logger.info(f"   ⏱️  Maximum duration: {self.dual_audio_save_duration}s")
-                if self.dual_save_split_audio:
-                    logger.info("   ✅ Split audio saving: ENABLED")
-                if self.dual_save_raw_audio:
-                    logger.info("   ✅ Raw audio saving: ENABLED")
-            else:
-                logger.info("🎵 AWS Dual Connection: Audio saving is DISABLED")
+            # Split audio saving moved to AudioSaver component at pipeline level
+            logger.info(
+                "🎵 AWS Dual Connection: Audio saving now handled by AudioSaver component"
+            )
 
             logger.info(
                 "✅ AWS Dual Connection: Dual connection stream started successfully"
@@ -2219,10 +2187,6 @@ class AWSTranscribeProvider(TranscriptionProvider):
         test_mode = self.dual_connection_test_mode
 
         try:
-            # Save raw audio input if enabled
-            if self.dual_save_raw_audio and self._raw_audio_saver:
-                self._raw_audio_saver.write_audio_data(audio_chunk)
-
             # Log raw audio input for debugging
             self._log_raw_audio_input(audio_chunk)
 
@@ -2298,19 +2262,8 @@ class AWSTranscribeProvider(TranscriptionProvider):
                     f"🧪 AWS Dual Connection (#{self._dual_audio_chunk_count}): Test mode={test_mode}, Active channels: {', '.join(active_channels)}"
                 )
 
-                # Log audio saving status periodically
-                if (
-                    self.dual_save_split_audio
-                    and components["channel_splitter"].audio_saver
-                ):
-                    if components["channel_splitter"].audio_saver.is_active:
-                        logger.info(
-                            "🎵 AWS Dual Connection: Audio saving in progress..."
-                        )
-                    else:
-                        logger.info(
-                            "🎵 AWS Dual Connection: Audio saving completed or not started"
-                        )
+                # Audio saving status moved to AudioSaver component
+                # Note: Split audio saving is now handled by AudioSaver at pipeline level
 
         except Exception as e:
             logger.error(f"❌ AWS Dual Connection: Audio send failed: {e}")
@@ -2534,21 +2487,6 @@ class AWSTranscribeProvider(TranscriptionProvider):
                         f"❌ AWS Dual Connection: Error stopping split audio saving: {e}"
                     )
 
-            # Stop raw audio saving if active
-            if self._raw_audio_saver and self._raw_audio_saver.is_active():
-                try:
-                    raw_stats = self._raw_audio_saver.stop_recording()
-                    logger.info(
-                        "🎵 AWS Dual Connection: Raw audio saving stopped during cleanup"
-                    )
-                    logger.info(
-                        f"   📁 Raw audio file: {raw_stats.get('file_path', 'N/A')}"
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"❌ AWS Dual Connection: Error stopping raw audio saving: {e}"
-                    )
-
             # Always cleanup components references
             await self._cleanup_dual_connection_components()
 
@@ -2640,51 +2578,6 @@ class AWSTranscribeProvider(TranscriptionProvider):
         except Exception as e:
             logger.error(f"❌ RAW AUDIO: Analysis failed: {e}")
             return None
-
-    def _initialize_raw_audio_saving(self, audio_config) -> None:
-        """
-        Initialize raw audio saving to capture PyAudio input before channel splitting.
-
-        Args:
-            audio_config: Audio configuration for proper WAV file creation
-        """
-        try:
-            from datetime import datetime
-
-            from ..audio_file_writer import AudioFileWriter
-
-            # Create raw audio file with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            raw_audio_path = (
-                f"{self.dual_audio_save_path}/raw_stereo_input_{timestamp}.wav"
-            )
-
-            self._raw_audio_saver = AudioFileWriter(
-                file_path=raw_audio_path,
-                sample_rate=audio_config.sample_rate,
-                channels=audio_config.channels,  # Keep original channel count (should be 2 for stereo)
-                sample_width=2,  # int16 = 2 bytes
-                max_duration=self.dual_audio_save_duration,
-            )
-
-            # Start recording immediately
-            if self._raw_audio_saver.start_recording():
-                logger.info("🎵 AWS Dual Connection: Raw audio saving started")
-                logger.info(f"   📁 File: {raw_audio_path}")
-                logger.info(
-                    f"   📋 Format: {audio_config.sample_rate}Hz, {audio_config.channels}ch, 16-bit"
-                )
-            else:
-                logger.error(
-                    "❌ AWS Dual Connection: Failed to start raw audio recording"
-                )
-                self._raw_audio_saver = None
-
-        except Exception as e:
-            logger.error(
-                f"❌ AWS Dual Connection: Failed to initialize raw audio saving: {e}"
-            )
-            self._raw_audio_saver = None
 
     async def _cleanup_dual_connection_components(self) -> None:
         """

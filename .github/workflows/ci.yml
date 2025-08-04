@@ -39,7 +39,6 @@ env:
   TRANSCRIPTION_PROVIDER: "aws"
   CAPTURE_PROVIDER: "pyaudio"
   AUDIO_SAMPLE_RATE: "16000"
-  AUDIO_CHANNELS: "1"
   LOG_LEVEL: "WARNING"  # Reduce CI log noise
 
   # Disable real service connections
