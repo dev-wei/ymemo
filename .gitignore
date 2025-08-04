@@ -266,3 +266,5 @@ config_local.py
 settings_local.py
 
 /debug_audio
+
+/.ruff_cache

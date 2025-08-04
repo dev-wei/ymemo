@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # Import the functions we want to test
-from config.audio_config import (
+from src.config.audio_config import (
     QUALITY_DISPLAY_AVERAGE,
     QUALITY_DISPLAY_HIGH,
     SAMPLE_RATE_AVERAGE,

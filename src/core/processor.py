@@ -7,9 +7,10 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from config.audio_config import get_config
+from src.config.audio_config import get_config
 
 from ..analytics.session_analytics import SessionAnalytics
+from ..audio.audio_saver import AudioSaver
 from ..utils.exceptions import PipelineError, PipelineTimeoutError
 from .factory import AudioProcessorFactory
 from .interfaces import AudioCaptureProvider, TranscriptionProvider, TranscriptionResult
@@ -54,6 +55,10 @@ class AudioProcessor:
         logger.debug(
             f"🎚️  AudioProcessor: Audio config - sample_rate={self.audio_config.sample_rate}, channels={self.audio_config.channels}, format={self.audio_config.format}"
         )
+
+        # Initialize audio saver as independent consumer
+        audio_saving_config = system_config.get_audio_saving_config()
+        self.audio_saver = self._initialize_audio_saver(audio_saving_config)
 
         # State
         self.is_running = False
@@ -156,6 +161,167 @@ class AudioProcessor:
             raise RuntimeError(
                 f"Failed to initialize audio processor providers: {e}"
             ) from e
+
+    def _initialize_audio_saver(
+        self, audio_saving_config: dict[str, Any]
+    ) -> AudioSaver | None:
+        """Initialize audio saver as independent consumer."""
+        try:
+            # Comprehensive validation of audio saving configuration
+            enabled = audio_saving_config["enabled"]
+            save_split_audio = audio_saving_config.get("save_split_audio", False)
+
+            # Log comprehensive audio saving configuration
+            logger.info("🎵 AudioProcessor: Validating audio saving configuration")
+            logger.info(f"   🎵 Raw audio saving: {enabled}")
+            logger.info(f"   🔀 Split audio saving: {save_split_audio}")
+            logger.info(f"   📁 Save path: {audio_saving_config['save_path']}")
+            logger.info(f"   ⏱️  Max duration: {audio_saving_config['max_duration']}s")
+            logger.info(f"   🎚️  Input channels: {self.audio_config.channels}")
+            logger.info(f"   📊 Sample rate: {self.audio_config.sample_rate}Hz")
+
+            # Validate configuration consistency
+            if save_split_audio and self.audio_config.channels == 1:
+                logger.info(
+                    "✅ AudioProcessor: Split audio requested for mono input - AudioSaver will handle correctly"
+                )
+                logger.info(
+                    "   💡 Mono input + split audio = 1 raw file (no actual splitting needed)"
+                )
+            elif save_split_audio and self.audio_config.channels == 2:
+                logger.info(
+                    "✅ AudioProcessor: Split audio requested for stereo input - AudioSaver will create split files"
+                )
+                logger.info(
+                    "   💡 Stereo input + split audio = 1 raw file + 2 split channel files"
+                )
+            elif not save_split_audio:
+                logger.info(
+                    "✅ AudioProcessor: Split audio disabled - AudioSaver will create raw file only"
+                )
+                logger.info(
+                    f"   💡 {self.audio_config.channels}-channel input + no split = 1 raw file"
+                )
+
+            # Validate that AudioSaver is the ONLY component saving audio files
+            logger.info(
+                "🎯 AudioProcessor: AudioSaver is configured as the SINGLE audio saving component"
+            )
+            logger.info(
+                "   ⚠️ No other components (AWS provider, channel splitter) should save audio files independently"
+            )
+
+            # Use device-agnostic placeholder configuration for AudioSaver initialization
+            # The actual device-optimized configuration will be set during start_recording()
+            from .interfaces import AudioConfig
+
+            placeholder_audio_config = AudioConfig(
+                sample_rate=self.audio_config.sample_rate,
+                channels=1,  # Placeholder - will be updated with actual device channels during recording
+                chunk_size=self.audio_config.chunk_size,
+                format=self.audio_config.format,
+            )
+
+            logger.info(
+                "🎵 AudioProcessor: Initializing AudioSaver with device-agnostic placeholder config"
+            )
+            logger.info(
+                f"   📋 Placeholder config: {placeholder_audio_config.sample_rate}Hz, {placeholder_audio_config.channels}ch"
+            )
+            logger.info(
+                "   💡 Real device configuration will be applied during start_recording()"
+            )
+
+            audio_saver = AudioSaver(
+                enabled=enabled,
+                save_path=audio_saving_config["save_path"],
+                max_duration=audio_saving_config["max_duration"],
+                audio_config=placeholder_audio_config,
+                save_split_audio=save_split_audio,
+            )
+
+            if audio_saver.enabled:
+                logger.info(
+                    "🎵 AudioProcessor: Audio saver initialized as parallel consumer"
+                )
+                if save_split_audio:
+                    logger.info(
+                        "🔀 AudioProcessor: Split audio saving enabled for AudioSaver"
+                    )
+            else:
+                logger.debug("🎵 AudioProcessor: Audio saver disabled")
+
+            return audio_saver
+
+        except Exception as e:
+            logger.error(f"❌ AudioProcessor: Audio saver initialization failed: {e}")
+            # Return disabled audio saver rather than failing the entire processor
+            return AudioSaver(
+                enabled=False,
+                save_path="./debug_audio/",
+                max_duration=30,
+                audio_config=self.audio_config,
+                save_split_audio=False,
+            )
+
+    async def _distribute_audio_to_consumers(self, audio_chunk: bytes) -> None:
+        """
+        Distribute audio chunk to parallel consumers using fan-out pattern.
+
+        Both transcription provider and audio saver receive the same raw audio
+        simultaneously as independent terminal consumers.
+        """
+        tasks = []
+        consumer_names = []
+
+        # Consumer 1: Transcription Provider (time-sensitive, highest priority)
+        if self.transcription_provider:
+            tasks.append(self.transcription_provider.send_audio(audio_chunk))
+            consumer_names.append("Transcription Provider")
+
+        # Consumer 2: Audio Saver (non-time-sensitive, lower priority)
+        if self.audio_saver and self.audio_saver.is_saving_active():
+            tasks.append(self.audio_saver.save_audio_chunk(audio_chunk))
+            consumer_names.append("Audio Saver")
+
+        # Log audio distribution for validation (periodically to avoid spam)
+        if not hasattr(self, '_audio_distribution_count'):
+            self._audio_distribution_count = 0
+
+        self._audio_distribution_count += 1
+
+        # Log every 100 chunks for validation
+        if self._audio_distribution_count % 100 == 0:
+            logger.info(
+                f"🔀 AudioProcessor: Audio chunk #{self._audio_distribution_count} distributed to {len(tasks)} consumers"
+            )
+            logger.info(f"   🎯 Active consumers: {', '.join(consumer_names)}")
+            logger.info(f"   📊 Chunk size: {len(audio_chunk)} bytes")
+
+            # Validate single audio saving responsibility
+            audio_saving_active = (
+                self.audio_saver and self.audio_saver.is_saving_active()
+            )
+            if audio_saving_active:
+                logger.info("   ✅ AudioSaver is the ONLY component saving audio files")
+            else:
+                logger.info("   🔇 No audio saving active")
+
+        # Execute all consumers in parallel
+        if tasks:
+            try:
+                await asyncio.gather(*tasks)
+            except Exception as e:
+                # Enhanced error logging for validation
+                logger.error(f"❌ AudioProcessor: Error in audio consumer: {e}")
+                logger.error(f"   🎯 Failed consumers: {consumer_names}")
+                logger.error(
+                    f"   📊 Chunk: #{self._audio_distribution_count}, {len(audio_chunk)} bytes"
+                )
+
+                # Re-raise if it was a transcription error (critical)
+                if len(tasks) == 1 or not self.audio_saver:
+                    raise
 
     async def initialize(self) -> None:
         """Verify providers are initialized and set up connection monitoring."""
@@ -279,11 +445,7 @@ class AudioProcessor:
                         # Note: connection_strategy removed - now auto-detected based on device channels
                         "dual_fallback_enabled": fresh_config.aws_dual_fallback_enabled,
                         "channel_balance_threshold": fresh_config.aws_channel_balance_threshold,
-                        "dual_connection_test_mode": fresh_config.aws_dual_connection_test_mode,
-                        "dual_save_split_audio": fresh_config.aws_dual_save_split_audio,
-                        "dual_save_raw_audio": fresh_config.aws_dual_save_raw_audio,
-                        "dual_audio_save_path": fresh_config.aws_dual_audio_save_path,
-                        "dual_audio_save_duration": fresh_config.aws_dual_audio_save_duration,
+                        # Note: Audio saving parameters removed - now handled at pipeline level
                     }
                 elif provider_name == "azure":
                     config = {
@@ -383,10 +545,32 @@ class AudioProcessor:
                 device_id
             )
 
+            logger.info("🎛️ AudioProcessor: Audio Configuration Summary:")
+            logger.info(f"   🎚️ Device {device_id} optimized config:")
+            logger.info(f"      📊 Sample Rate: {optimized_audio_config.sample_rate}Hz")
+            logger.info(f"      🎛️ Channels: {optimized_audio_config.channels}")
+            logger.info(f"      📋 Format: {optimized_audio_config.format}")
+            logger.info(f"      🔢 Chunk Size: {optimized_audio_config.chunk_size}")
+
+            # Compare with system base configuration
+            logger.info(f"   📊 System base config comparison:")
             logger.info(
-                f"🎛️ AudioProcessor: Using optimized config for device {device_id}: "
-                f"{optimized_audio_config.sample_rate}Hz, {optimized_audio_config.channels}ch, {optimized_audio_config.format}"
+                f"      📊 Sample Rate: {self.audio_config.sample_rate}Hz {'✅' if self.audio_config.sample_rate == optimized_audio_config.sample_rate else '⚠️'}"
             )
+            logger.info(
+                f"      🎛️ Channels: {self.audio_config.channels} {'✅' if self.audio_config.channels == optimized_audio_config.channels else '⚠️'}"
+            )
+            logger.info(
+                f"      📋 Format: {self.audio_config.format} {'✅' if self.audio_config.format == optimized_audio_config.format else '⚠️'}"
+            )
+
+            if (
+                optimized_audio_config.sample_rate != self.audio_config.sample_rate
+                or optimized_audio_config.channels != self.audio_config.channels
+            ):
+                logger.warning(
+                    "⚠️ Device optimization changed audio parameters - AudioSaver will be updated"
+                )
 
             # Log channel processing strategy info
             logger.info(
@@ -443,6 +627,207 @@ class AudioProcessor:
                     f"🔧 AudioProcessor: Transcription config - capture: {capture_channels}ch → processed: {processed_channels}ch"
                 )
                 await self.transcription_provider.start_stream(transcription_config)
+
+                # Update audio saver configuration for device switching with proper stop-then-restart sequence
+                logger.info("🔧 AudioProcessor: AudioSaver Device Switch Debug:")
+                logger.info(f"   🎵 audio_saver exists: {self.audio_saver is not None}")
+                logger.info(
+                    f"   🎛️  optimized device channels: {optimized_audio_config.channels}"
+                )
+                logger.info(
+                    f"   📊 optimized device sample rate: {optimized_audio_config.sample_rate}Hz"
+                )
+
+                if self.audio_saver:
+                    logger.info(
+                        f"   ✅ audio_saver.enabled: {self.audio_saver.enabled}"
+                    )
+                    logger.info(
+                        f"   🔀 audio_saver.save_split_audio: {self.audio_saver.save_split_audio}"
+                    )
+                    logger.info(
+                        f"   🎚️  current audio_saver.audio_config.channels: {self.audio_saver.audio_config.channels}"
+                    )
+                    logger.info(
+                        f"   📊 current audio_saver.audio_config.sample_rate: {self.audio_saver.audio_config.sample_rate}Hz"
+                    )
+                    logger.info(
+                        f"   🟢 current audio_saver.is_saving_active(): {self.audio_saver.is_saving_active()}"
+                    )
+
+                    # Create new device configuration
+                    audio_saver_config = AudioConfig(
+                        sample_rate=optimized_audio_config.sample_rate,
+                        channels=optimized_audio_config.channels,  # Use actual device channels
+                        chunk_size=optimized_audio_config.chunk_size,
+                        format=optimized_audio_config.format,
+                    )
+
+                    # Detect configuration changes for proper device switching handling
+                    old_channels = self.audio_saver.audio_config.channels
+                    old_sample_rate = self.audio_saver.audio_config.sample_rate
+                    new_channels = audio_saver_config.channels
+                    new_sample_rate = audio_saver_config.sample_rate
+
+                    config_changed = (
+                        old_channels != new_channels
+                        or old_sample_rate != new_sample_rate
+                    )
+
+                    logger.info(
+                        f"🔄 AudioProcessor: Target AudioSaver config: {audio_saver_config.channels}ch, {audio_saver_config.sample_rate}Hz"
+                    )
+
+                    if config_changed:
+                        logger.info(f"   📋 Device configuration change detected:")
+                        logger.info(
+                            f"      🎛️  Channels: {old_channels}ch → {new_channels}ch"
+                        )
+                        logger.info(
+                            f"      📊 Sample Rate: {old_sample_rate}Hz → {new_sample_rate}Hz"
+                        )
+                        logger.info(
+                            f"      🔀 Split audio will be: {'ENABLED' if self.audio_saver.save_split_audio and new_channels == 2 else 'DISABLED/MONO'}"
+                        )
+
+                        # CRITICAL: Stop AudioSaver BEFORE reconfiguration to avoid timing issue
+                        if self.audio_saver.is_saving_active():
+                            logger.info(
+                                "🛑 AudioProcessor: AudioSaver is active - stopping for device configuration change..."
+                            )
+                            logger.info(
+                                "   💡 This is necessary to prevent 'Cannot update configuration while actively saving' error"
+                            )
+
+                            try:
+                                # Stop the active recording session
+                                stop_stats = self.audio_saver.stop_saving()
+                                logger.info(
+                                    f"✅ AudioProcessor: AudioSaver stopped for reconfiguration - stats: {stop_stats}"
+                                )
+
+                                # Small delay to ensure complete stop and cleanup
+                                await asyncio.sleep(0.1)
+
+                                # Verify AudioSaver is actually stopped
+                                if self.audio_saver.is_saving_active():
+                                    logger.error(
+                                        "❌ AudioProcessor: AudioSaver still active after stop - this should not happen!"
+                                    )
+                                    logger.error(
+                                        "   🚨 Device switching may fail due to timing issue"
+                                    )
+                                else:
+                                    logger.info(
+                                        "✅ AudioProcessor: AudioSaver confirmed stopped - safe to reconfigure"
+                                    )
+
+                            except Exception as e:
+                                logger.error(
+                                    f"❌ AudioProcessor: Failed to stop AudioSaver for reconfiguration: {e}"
+                                )
+                                logger.error(
+                                    "   💡 Continuing with reconfiguration attempt anyway..."
+                                )
+                        else:
+                            logger.info(
+                                "🔧 AudioProcessor: AudioSaver not currently active - safe to reconfigure directly"
+                            )
+
+                    else:
+                        logger.info(
+                            f"   📋 Device configuration unchanged: {new_channels}ch, {new_sample_rate}Hz"
+                        )
+                        logger.info(
+                            "   🔧 No stop-restart needed - configuration update only"
+                        )
+
+                    # NOW update configuration - AudioSaver is guaranteed to be inactive for device changes
+                    logger.info(
+                        "🔄 AudioProcessor: Applying device configuration to AudioSaver..."
+                    )
+                    try:
+                        self.audio_saver.update_audio_config(audio_saver_config)
+                        logger.info(
+                            "✅ AudioProcessor: AudioSaver configuration updated successfully"
+                        )
+
+                        # Verify the configuration was applied correctly
+                        if (
+                            self.audio_saver.audio_config.channels == new_channels
+                            and self.audio_saver.audio_config.sample_rate
+                            == new_sample_rate
+                        ):
+                            logger.info(
+                                f"   ✅ Configuration verified: {self.audio_saver.audio_config.channels}ch, {self.audio_saver.audio_config.sample_rate}Hz"
+                            )
+                        else:
+                            logger.error(f"   ❌ Configuration mismatch after update!")
+                            logger.error(
+                                f"      Expected: {new_channels}ch, {new_sample_rate}Hz"
+                            )
+                            logger.error(
+                                f"      Actual: {self.audio_saver.audio_config.channels}ch, {self.audio_saver.audio_config.sample_rate}Hz"
+                            )
+
+                    except Exception as e:
+                        logger.error(
+                            f"❌ AudioProcessor: AudioSaver configuration update failed: {e}"
+                        )
+                        logger.error(
+                            "   💡 AudioSaver may be in inconsistent state - audio saving may not work correctly"
+                        )
+
+                    # Start AudioSaver with new configuration if enabled
+                    if self.audio_saver.enabled:
+                        logger.info(
+                            "🚀 AudioProcessor: Starting AudioSaver with new device configuration..."
+                        )
+                        try:
+                            self.audio_saver.start_saving()
+
+                            # Verify AudioSaver started correctly
+                            if self.audio_saver.is_saving_active():
+                                logger.info(
+                                    "✅ AudioProcessor: AudioSaver started successfully as parallel consumer"
+                                )
+
+                                # Log expected file creation based on final configuration
+                                if (
+                                    self.audio_saver.save_split_audio
+                                    and new_channels == 2
+                                ):
+                                    logger.info(
+                                        "   📁 Expected files: 1 raw + 2 split channel files (3 total)"
+                                    )
+                                else:
+                                    logger.info("   📁 Expected files: 1 raw file only")
+                            else:
+                                logger.error(
+                                    "❌ AudioProcessor: AudioSaver failed to start - is_saving_active() returned False"
+                                )
+
+                        except Exception as e:
+                            logger.error(
+                                f"❌ AudioProcessor: Failed to start AudioSaver: {e}"
+                            )
+                            logger.error(
+                                "   💡 No audio files will be saved for this recording session"
+                            )
+                    else:
+                        logger.info(
+                            "⚠️ AudioProcessor: AudioSaver is disabled - configuration updated but no saving will occur"
+                        )
+                        logger.info(
+                            "   💡 AudioSaver disabled due to initialization error or configuration"
+                        )
+                else:
+                    logger.info(
+                        "⚠️ AudioProcessor: AudioSaver is None - no audio files will be saved"
+                    )
+                    logger.info(
+                        "   💡 Check SAVE_RAW_AUDIO or SAVE_SPLIT_AUDIO environment variables"
+                    )
 
             # Start audio capture with error handling
             async with self.error_handler.handle_pipeline_operation(
@@ -585,6 +970,18 @@ class AudioProcessor:
                         f"⚠️ AudioProcessor: Error stopping transcription stream: {e}"
                     )
 
+            # Stop audio saver
+            if self.audio_saver and self.audio_saver.is_saving_active():
+                try:
+                    logger.info("🛑 AudioProcessor: Stopping audio saver...")
+                    stats = self.audio_saver.stop_saving()
+                    if stats:
+                        logger.info(f"✅ AudioProcessor: Audio saver stopped - {stats}")
+                    else:
+                        logger.info("✅ AudioProcessor: Audio saver stopped")
+                except Exception as e:
+                    logger.warning(f"⚠️ AudioProcessor: Error stopping audio saver: {e}")
+
             # Wait for task cancellation with shorter timeout
             if tasks_to_cancel:
                 try:
@@ -635,9 +1032,9 @@ class AudioProcessor:
 
                 chunk_count += 1
 
-                # Record audio chunk processing
+                # Record audio chunk processing and distribute to parallel consumers
                 processing_start = time.time()
-                await self.transcription_provider.send_audio(audio_chunk)
+                await self._distribute_audio_to_consumers(audio_chunk)
                 processing_time_ms = (time.time() - processing_start) * 1000
 
                 self.pipeline_monitor.record_audio_chunk_processed(

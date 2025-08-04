@@ -89,7 +89,7 @@ class AudioProcessorFactory:
 
         Example:
             # Create AWS provider using system config
-            from config.audio_config import get_config
+            from src.config.audio_config import get_config
             config = get_config()
             aws_provider = AudioProcessorFactory.create_transcription_provider(
                 'aws', **config.get_transcription_config()
@@ -118,28 +118,10 @@ class AudioProcessorFactory:
 
             # Enhanced logging for AWS provider configuration
             if provider_name == "aws" and config:
-                audio_saving_enabled = config.get(
-                    "dual_save_split_audio"
-                ) or config.get("dual_save_raw_audio")
-                if audio_saving_enabled:
-                    logger.info("🎵 Factory: AWS provider audio saving configuration:")
-                    logger.info(
-                        f"   🔀 Split audio: {config.get('dual_save_split_audio', False)}"
-                    )
-                    logger.info(
-                        f"   🎵 Raw audio: {config.get('dual_save_raw_audio', False)}"
-                    )
-                    logger.info(
-                        f"   📁 Save path: {config.get('dual_audio_save_path', 'N/A')}"
-                    )
-                    logger.info(
-                        f"   ⏱️  Duration: {config.get('dual_audio_save_duration', 'N/A')}s"
-                    )
-                    logger.info(
-                        f"   🧪 Test mode: {config.get('dual_connection_test_mode', 'N/A')}"
-                    )
-                else:
-                    logger.info("🎵 Factory: AWS provider audio saving is DISABLED")
+                # Audio saving is now handled at pipeline level by AudioSaver component
+                logger.debug(
+                    "🎵 Factory: Audio saving moved to AudioSaver component at pipeline level"
+                )
 
             instance = provider_class(**config)
             logger.info(
@@ -377,7 +359,7 @@ def create_aws_transcribe_provider(
         )
     """
     # Use system configuration as defaults if not provided
-    from config.audio_config import get_config
+    from src.config.audio_config import get_config
 
     system_config = get_config()
 

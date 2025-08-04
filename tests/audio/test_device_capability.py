@@ -210,7 +210,7 @@ class TestAudioConfigOptimization(BaseTest):
     @pytest.mark.unit
     def test_device_optimized_audio_config_no_device(self):
         """Test device-optimized audio config with no device specified."""
-        from config.audio_config import AudioSystemConfig
+        from src.config.audio_config import AudioSystemConfig
 
         config = AudioSystemConfig(channels=2, sample_rate=44100)
         optimized = config.get_device_optimized_audio_config(None)
@@ -222,7 +222,7 @@ class TestAudioConfigOptimization(BaseTest):
     @pytest.mark.unit
     def test_device_optimized_audio_config_channel_reduction(self):
         """Test device-optimized audio config with channel reduction."""
-        from config.audio_config import AudioSystemConfig
+        from src.config.audio_config import AudioSystemConfig
 
         config = AudioSystemConfig(channels=4, sample_rate=16000)
 
@@ -249,7 +249,7 @@ class TestAudioConfigOptimization(BaseTest):
     @pytest.mark.unit
     def test_device_optimized_audio_config_exception_fallback(self):
         """Test device-optimized audio config with exception fallback."""
-        from config.audio_config import AudioSystemConfig
+        from src.config.audio_config import AudioSystemConfig
 
         config = AudioSystemConfig(channels=4, sample_rate=16000)
 

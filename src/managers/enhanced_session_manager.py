@@ -437,7 +437,7 @@ class EnhancedAudioSessionManager:
                 )
 
                 # Create audio processor using centralized configuration
-                from config.audio_config import get_config
+                from src.config.audio_config import get_config
 
                 system_config = get_config()
                 transcription_config = (

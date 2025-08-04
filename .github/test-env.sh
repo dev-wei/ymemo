@@ -26,7 +26,6 @@ export AWS_REGION=us-east-1
 export TRANSCRIPTION_PROVIDER=aws
 export CAPTURE_PROVIDER=pyaudio
 export AUDIO_SAMPLE_RATE=16000
-export AUDIO_CHANNELS=1
 
 # Additional AWS environment variables for comprehensive mocking
 export AWS_SESSION_TOKEN=test-session-token
@@ -74,5 +73,5 @@ echo "   - AWS validation: DISABLED"
 echo "   - Mock services: ENABLED"
 echo "   - Log level: WARNING"
 echo "   - Provider: $TRANSCRIPTION_PROVIDER"
-echo "   - Audio: ${AUDIO_SAMPLE_RATE}Hz, ${AUDIO_CHANNELS} channel(s)"
+echo "   - Audio: ${AUDIO_SAMPLE_RATE}Hz, device-based channels"
 echo ""

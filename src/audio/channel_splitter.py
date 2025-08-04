@@ -105,6 +105,16 @@ class AudioChannelSplitter:
         # Audio saving for debugging
         self.audio_saver = None
         if self.enable_audio_saving:
+            # Validate that this AudioChannelSplitter is being used for actual stereo splitting
+            # AudioChannelSplitter should only save split audio files when processing stereo input
+            # For mono input, audio saving should be handled by the main AudioSaver component
+            logger.warning(
+                "⚠️ AudioChannelSplitter: Audio saving enabled - this should only be used for stereo channel splitting!"
+            )
+            logger.warning(
+                "   💡 For mono input audio saving, use the main AudioSaver component instead"
+            )
+
             try:
                 self.audio_saver = DualChannelAudioSaver(
                     save_path=audio_save_path,
@@ -114,6 +124,9 @@ class AudioChannelSplitter:
                 logger.info("🎵 AudioChannelSplitter: Audio saving ENABLED")
                 logger.info(f"   📁 Save path: {audio_save_path}")
                 logger.info(f"   ⏱️  Duration: {save_duration}s")
+                logger.warning(
+                    "   ⚠️ This will create left/right channel files - ensure input is stereo!"
+                )
             except Exception as e:
                 logger.error(
                     f"❌ AudioChannelSplitter: Failed to initialize audio saver: {e}"
@@ -156,6 +169,18 @@ class AudioChannelSplitter:
                 logger.error(
                     f"   📊 Remainder: {chunk_size % bytes_per_stereo_sample} bytes"
                 )
+
+                # Additional validation if audio saving is enabled
+                if self.enable_audio_saving:
+                    logger.error(
+                        f"❌ AUDIO SAVING VALIDATION: AudioChannelSplitter with audio saving enabled "
+                        f"received invalid stereo input - this suggests mono input is being processed!"
+                    )
+                    logger.error(
+                        f"   💡 Solution: Disable audio saving on AudioChannelSplitter for mono input, "
+                        f"use main AudioSaver component instead"
+                    )
+
                 return SplitResult(
                     left_channel=b"",
                     right_channel=b"",

@@ -40,7 +40,7 @@ class AudioSessionManager:
         )
         try:
             # Use centralized configuration instead of hardcoded values
-            from config.audio_config import get_config
+            from src.config.audio_config import get_config
 
             system_config = get_config()
 
@@ -356,7 +356,7 @@ class AudioSessionManager:
             )
 
             # Get current system configuration (includes any environment variable updates)
-            from config.audio_config import get_config
+            from src.config.audio_config import get_config
 
             fresh_config = get_config()
 

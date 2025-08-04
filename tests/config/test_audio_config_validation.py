@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from config.audio_config import get_config
+from src.config.audio_config import get_config
 from src.core.factory import AudioProcessorFactory
 from tests.base.base_test import BaseTest
 
@@ -23,10 +23,11 @@ class TestAudioConfigValidation(BaseTest):
     def test_environment(self):
         """Set up test environment variables."""
         test_env = {
-            "AWS_DUAL_CONNECTION_TEST_MODE": "left_only",
-            "AWS_DUAL_SAVE_SPLIT_AUDIO": "true",
-            "AWS_DUAL_AUDIO_SAVE_PATH": "./debug_audio/",
-            "AWS_DUAL_AUDIO_SAVE_DURATION": "30",
+            # Use new provider-agnostic variables
+            "SAVE_RAW_AUDIO": "true",
+            "SAVE_SPLIT_AUDIO": "true",
+            "AUDIO_SAVE_PATH": "./debug_audio/",
+            "AUDIO_SAVE_DURATION": "30",
         }
 
         with patch.dict(os.environ, test_env):
@@ -38,9 +39,11 @@ class TestAudioConfigValidation(BaseTest):
 
         assert config is not None
         assert config.transcription_provider == "aws"
-        # Note: aws_connection_strategy removed - now auto-detected based on device channels
-        assert config.aws_dual_connection_test_mode == "left_only"
-        assert config.aws_dual_save_split_audio is True
+        # Test new provider-agnostic audio saving config
+        assert config.save_raw_audio is True
+        assert config.save_split_audio is True
+        assert config.audio_save_path == "./debug_audio/"
+        assert config.audio_save_duration == 30
 
     def test_transcription_config_generation(self, test_environment):
         """Test transcription configuration generation."""
@@ -54,25 +57,16 @@ class TestAudioConfigValidation(BaseTest):
         expected_keys = [
             "region",
             "language_code",
-            "connection_strategy",
             "dual_fallback_enabled",
             "channel_balance_threshold",
-            "dual_connection_test_mode",
-            "dual_save_split_audio",
-            "dual_save_raw_audio",
-            "dual_audio_save_path",
-            "dual_audio_save_duration",
         ]
 
         for key in expected_keys:
             assert key in transcription_config, f"Missing key: {key}"
 
         # Verify specific values
-        assert transcription_config["connection_strategy"] == "dual"
-        assert transcription_config["dual_connection_test_mode"] == "left_only"
-        assert transcription_config["dual_save_split_audio"] is True
-        assert transcription_config["dual_audio_save_path"] == "./debug_audio/"
-        assert transcription_config["dual_audio_save_duration"] == 30
+        assert transcription_config["dual_fallback_enabled"] is True
+        assert transcription_config["channel_balance_threshold"] == 0.3
 
     @patch("src.audio.providers.aws_transcribe.boto3")
     def test_provider_creation_with_config(self, mock_boto3, test_environment):
@@ -90,13 +84,13 @@ class TestAudioConfigValidation(BaseTest):
 
         assert provider is not None
 
-        # Verify configuration was applied
-        assert hasattr(provider, "dual_save_split_audio")
-        assert provider.dual_save_split_audio is True
-        assert hasattr(provider, "dual_audio_save_path")
-        assert provider.dual_audio_save_path == "./debug_audio/"
-        assert hasattr(provider, "dual_audio_save_duration")
-        assert provider.dual_audio_save_duration == 30
+        # Verify configuration was applied (audio saving parameters removed from provider)
+        assert hasattr(provider, "region")
+        # Use actual configured region instead of hardcoded value
+        assert provider.region == config.aws_region
+        assert hasattr(provider, "language_code")
+        assert provider.language_code == "en-US"
+        # Note: dual_save_split_audio parameter removed - audio saving handled at pipeline level
 
     def test_config_with_different_providers(self):
         """Test configuration generation for different providers."""
@@ -105,7 +99,7 @@ class TestAudioConfigValidation(BaseTest):
         # Test AWS configuration
         aws_config = config.get_transcription_config()
         assert "region" in aws_config
-        assert "connection_strategy" in aws_config
+        assert "dual_fallback_enabled" in aws_config
 
         # Test with different provider setting
         with patch.object(config, "transcription_provider", "azure"):
@@ -130,24 +124,24 @@ class TestAudioConfigValidation(BaseTest):
         ]
 
         for env_value, expected in test_cases:
-            with patch.dict(os.environ, {"AWS_DUAL_SAVE_SPLIT_AUDIO": env_value}):
+            with patch.dict(os.environ, {"SAVE_SPLIT_AUDIO": env_value}):
                 config = get_config()
                 assert (
-                    config.aws_dual_save_split_audio == expected
+                    config.save_split_audio == expected
                 ), f"Failed for env_value='{env_value}', expected={expected}"
 
     def test_numeric_environment_variable_parsing(self):
         """Test that numeric environment variables are parsed correctly."""
-        with patch.dict(os.environ, {"AWS_DUAL_AUDIO_SAVE_DURATION": "45"}):
+        with patch.dict(os.environ, {"AUDIO_SAVE_DURATION": "45"}):
             config = get_config()
-            assert config.aws_dual_audio_save_duration == 45
-            assert isinstance(config.aws_dual_audio_save_duration, int)
+            assert config.audio_save_duration == 45
+            assert isinstance(config.audio_save_duration, int)
 
         # Test invalid numeric value (should use default)
-        with patch.dict(os.environ, {"AWS_DUAL_AUDIO_SAVE_DURATION": "invalid"}):
+        with patch.dict(os.environ, {"AUDIO_SAVE_DURATION": "invalid"}):
             config = get_config()
-            assert isinstance(config.aws_dual_audio_save_duration, int)
-            assert config.aws_dual_audio_save_duration > 0  # Should have valid default
+            assert isinstance(config.audio_save_duration, int)
+            assert config.audio_save_duration > 0  # Should have valid default
 
     def test_config_validation_errors(self):
         """Test configuration validation with invalid settings."""
@@ -170,7 +164,8 @@ class TestAudioConfigValidation(BaseTest):
 
         # Should return the same values (not necessarily same instance)
         assert config1.transcription_provider == config2.transcription_provider
-        # Note: aws_connection_strategy removed - now auto-detected based on device channels
+        assert config1.save_split_audio == config2.save_split_audio
+        assert config1.save_raw_audio == config2.save_raw_audio
 
         # Test that get_config() works consistently
         get_config()
