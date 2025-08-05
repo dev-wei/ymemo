@@ -309,3 +309,104 @@ def load_persona_by_id(persona_id_str: str) -> Tuple[gr.Dataframe, str, str, str
         logger.error(f"❌ Unexpected error loading persona: {str(e)}", exc_info=True)
         gr.Warning(f"Unexpected error loading persona: {str(e)} 💥!", duration=5)
         return (gr.Dataframe(value=load_personas_data()), "", "", "")
+
+
+def get_persona_choices() -> List[Tuple[str, str]]:
+    """Get persona choices for dropdown selection.
+
+    Returns:
+        List of tuples (display_name, persona_id) for dropdown choices
+        Includes a "None" option for no persona selection
+    """
+    try:
+        logger.info("🔍 Getting persona choices for dropdown")
+        personas = get_all_personas()
+
+        # Start with None option
+        choices = [("None", "")]
+
+        # Add persona choices in format "Name (ID: X)"
+        for persona in personas:
+            display_name = f"{persona.name} (ID: {persona.id})"
+            choices.append((display_name, str(persona.id)))
+
+        logger.info(f"✅ Generated {len(choices)} persona choices")
+        return choices
+
+    except Exception as e:
+        logger.error(f"❌ Failed to get persona choices: {e}")
+        return [("None", "")]
+
+
+def handle_speaker_persona_change(selected_persona_id: str, speaker_label: str) -> str:
+    """Handle persona selection change for a speaker.
+
+    Args:
+        selected_persona_id: The selected persona ID (empty string for None)
+        speaker_label: "A" or "B" to identify the speaker
+
+    Returns:
+        Status message about the persona change
+    """
+    try:
+        logger.info(
+            f"🔄 Persona change for Speaker {speaker_label}: {selected_persona_id}"
+        )
+
+        if not selected_persona_id or selected_persona_id.strip() == "":
+            logger.info(f"✅ Speaker {speaker_label} persona cleared")
+            return f"✅ Speaker {speaker_label} persona cleared"
+
+        # Validate persona exists
+        persona_id = int(selected_persona_id.strip())
+        if not validate_persona_id_exists(persona_id):
+            logger.warning(
+                f"❌ Invalid persona ID for Speaker {speaker_label}: {persona_id}"
+            )
+            return f"❌ Invalid persona selected for Speaker {speaker_label}"
+
+        # Get persona details
+        from ..managers.persona_repository import get_persona_by_id
+
+        persona = get_persona_by_id(persona_id)
+
+        if persona:
+            logger.info(f"✅ Speaker {speaker_label} assigned persona: {persona.name}")
+            return f"✅ Speaker {speaker_label} assigned to persona: {persona.name}"
+        else:
+            logger.warning(
+                f"❌ Persona not found for Speaker {speaker_label}: {persona_id}"
+            )
+            return f"❌ Persona not found for Speaker {speaker_label}"
+
+    except ValueError:
+        logger.warning(
+            f"❌ Invalid persona ID format for Speaker {speaker_label}: {selected_persona_id}"
+        )
+        return f"❌ Invalid persona format for Speaker {speaker_label}"
+    except Exception as e:
+        logger.error(f"❌ Error changing persona for Speaker {speaker_label}: {e}")
+        return f"❌ Error changing persona for Speaker {speaker_label}: {str(e)}"
+
+
+def refresh_persona_dropdowns() -> Tuple[gr.Dropdown, gr.Dropdown]:
+    """Refresh both speaker persona dropdowns with current persona choices.
+
+    Returns:
+        Tuple of updated dropdowns for (Speaker A, Speaker B)
+    """
+    try:
+        logger.info("🔄 Refreshing persona dropdown choices")
+        persona_choices = get_persona_choices()
+
+        return (
+            gr.Dropdown(choices=persona_choices, value=""),
+            gr.Dropdown(choices=persona_choices, value=""),
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Failed to refresh persona dropdowns: {e}")
+        return (
+            gr.Dropdown(choices=[("None", "")], value=""),
+            gr.Dropdown(choices=[("None", "")], value=""),
+        )
