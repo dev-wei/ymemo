@@ -11,6 +11,7 @@ from src.config.audio_config import get_config
 
 from ..analytics.session_analytics import SessionAnalytics
 from ..audio.audio_saver import AudioSaver
+from ..audio.silence_detector import SilenceDetector
 from ..utils.exceptions import PipelineError, PipelineTimeoutError
 from .factory import AudioProcessorFactory
 from .interfaces import AudioCaptureProvider, TranscriptionProvider, TranscriptionResult
@@ -60,11 +61,20 @@ class AudioProcessor:
         audio_saving_config = system_config.get_audio_saving_config()
         self.audio_saver = self._initialize_audio_saver(audio_saving_config)
 
+        # Initialize silence detector for auto-stop functionality
+        self.silence_detector = self._initialize_silence_detector(system_config)
+
         # State
         self.is_running = False
         self.transcription_callback: Callable[[TranscriptionResult], None] | None = None
         self.error_callback: Callable[[Exception], None] | None = None
         self.connection_health_callback: Callable[[bool, str], None] | None = None
+        self.silence_auto_stop_callback: Callable[[], None] | None = (
+            None  # Callback for silence-triggered auto-stop
+        )
+        self._silence_auto_stop_requested = (
+            False  # Flag for silence-triggered auto-stop
+        )
 
         # Error handling
         error_config = error_handler_config or {}
@@ -264,12 +274,64 @@ class AudioProcessor:
                 save_split_audio=False,
             )
 
+    def _initialize_silence_detector(self, system_config) -> SilenceDetector:
+        """Initialize silence detector for auto-stop functionality."""
+        try:
+            silence_timeout = system_config.silence_timeout_seconds
+            logger.info(
+                f"🔇 AudioProcessor: Initializing SilenceDetector with {silence_timeout}s timeout"
+            )
+
+            # Create silence detector with auto-stop callback
+            silence_detector = SilenceDetector(
+                silence_timeout_seconds=silence_timeout,
+                auto_stop_callback=self._on_silence_auto_stop,
+            )
+
+            if silence_detector.is_enabled():
+                logger.info(
+                    "🔇 AudioProcessor: Silence detection enabled as safety feature"
+                )
+            else:
+                logger.info("🔇 AudioProcessor: Silence detection disabled")
+
+            return silence_detector
+
+        except Exception as e:
+            logger.error(
+                f"❌ AudioProcessor: Silence detector initialization failed: {e}"
+            )
+            # Return disabled detector rather than failing the entire processor
+            return SilenceDetector(
+                silence_timeout_seconds=0,  # Disabled
+            )
+
+    def _on_silence_auto_stop(self) -> None:
+        """Handle automatic stop triggered by silence detection."""
+        logger.warning(
+            "🔇 AudioProcessor: Auto-stopping recording due to prolonged silence"
+        )
+
+        # We need to stop recording asynchronously since this is called from audio processing thread
+        # Set a flag that will be checked by the main processing loop
+        self._silence_auto_stop_requested = True
+
+        # Notify the SessionManager about the silence-triggered stop
+        if self.silence_auto_stop_callback:
+            try:
+                self.silence_auto_stop_callback()
+            except Exception as e:
+                logger.error(
+                    f"❌ AudioProcessor: Error in silence auto-stop callback: {e}"
+                )
+
     async def _distribute_audio_to_consumers(self, audio_chunk: bytes) -> None:
         """
         Distribute audio chunk to parallel consumers using fan-out pattern.
 
         Both transcription provider and audio saver receive the same raw audio
-        simultaneously as independent terminal consumers.
+        simultaneously as independent terminal consumers. Also performs silence
+        detection for auto-stop functionality.
         """
         tasks = []
         consumer_names = []
@@ -283,6 +345,24 @@ class AudioProcessor:
         if self.audio_saver and self.audio_saver.is_saving_active():
             tasks.append(self.audio_saver.save_audio_chunk(audio_chunk))
             consumer_names.append("Audio Saver")
+
+        # Consumer 3: Silence Detector (safety feature, lowest priority)
+        if self.silence_detector and self.silence_detector.is_enabled():
+            # Analyze audio chunk for silence (non-blocking, synchronous)
+            try:
+                silence_timeout_exceeded = self.silence_detector.analyze_audio_chunk(
+                    audio_chunk
+                )
+                if silence_timeout_exceeded:
+                    logger.warning(
+                        "🔇 AudioProcessor: Silence timeout exceeded, stopping recording"
+                    )
+                    # The silence detector will have already called our callback
+                    # which sets the _silence_auto_stop_requested flag
+            except Exception as e:
+                logger.error(f"❌ AudioProcessor: Silence detection error: {e}")
+
+            consumer_names.append("Silence Detector")
 
         # Log audio distribution for validation (periodically to avoid spam)
         if not hasattr(self, '_audio_distribution_count'):
@@ -532,6 +612,7 @@ class AudioProcessor:
                 f"meeting_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             )
             self.session_transcripts.clear()
+            self._silence_auto_stop_requested = False  # Reset silence auto-stop flag
             logger.info(
                 f"🆔 AudioProcessor: Created meeting session: {self.current_meeting_id}"
             )
@@ -627,6 +708,19 @@ class AudioProcessor:
                     f"🔧 AudioProcessor: Transcription config - capture: {capture_channels}ch → processed: {processed_channels}ch"
                 )
                 await self.transcription_provider.start_stream(transcription_config)
+
+                # Configure silence detector with optimized audio configuration
+                if self.silence_detector and self.silence_detector.is_enabled():
+                    logger.info(
+                        "🔇 AudioProcessor: Configuring silence detector for recording session"
+                    )
+                    self.silence_detector.configure_audio_format(
+                        optimized_audio_config.format, optimized_audio_config.channels
+                    )
+                    self.silence_detector.reset_silence_tracking()
+                    logger.info(
+                        "🔇 AudioProcessor: Silence detection ready for safety monitoring"
+                    )
 
                 # Update audio saver configuration for device switching with proper stop-then-restart sequence
                 logger.info("🔧 AudioProcessor: AudioSaver Device Switch Debug:")
@@ -1048,6 +1142,15 @@ class AudioProcessor:
                     )
                     break
 
+                # Check for silence-triggered auto-stop
+                if self._silence_auto_stop_requested:
+                    logger.warning(
+                        "🔇 AudioProcessor: Silence auto-stop requested, breaking capture loop"
+                    )
+                    # The silence callback will have already been triggered to notify the SessionManager
+                    # Just break the loop - the AudioProcessor stop will be handled normally
+                    break
+
                 # Log every 50 chunks to monitor flow
                 if chunk_count % 50 == 0:
                     logger.info(
@@ -1254,6 +1357,15 @@ class AudioProcessor:
                 "🔍 AudioProcessor: Connection health callback set on transcription provider"
             )
 
+    def set_silence_auto_stop_callback(self, callback: Callable[[], None]) -> None:
+        """Set callback for silence-triggered auto-stop notifications.
+
+        Args:
+            callback: Function to call when silence timeout is exceeded
+        """
+        self.silence_auto_stop_callback = callback
+        logger.debug("🔇 AudioProcessor: Silence auto-stop callback set")
+
     def get_available_devices(self) -> dict[int, str]:
         """Get list of available audio input devices using existing provider."""
         # Providers should already be initialized - verify this
@@ -1295,6 +1407,11 @@ class AudioProcessor:
             "resource_summary": self.resource_manager.get_status(),
             "monitoring_metrics": self.pipeline_monitor.get_current_metrics(),
             "pipeline_health": self.pipeline_monitor.get_health_status(),
+            "silence_stats": (
+                self.silence_detector.get_silence_stats()
+                if self.silence_detector
+                else None
+            ),
         }
 
     def get_pipeline_health(self) -> dict[str, Any]:
@@ -1319,4 +1436,16 @@ class AudioProcessor:
             "resource_manager": self.resource_manager.get_status(),
             "pipeline_monitor": self.pipeline_monitor.get_health_status(),
             "monitoring_metrics": self.pipeline_monitor.get_current_metrics(),
+            "silence_detector": {
+                "enabled": (
+                    self.silence_detector.is_enabled()
+                    if self.silence_detector
+                    else False
+                ),
+                "stats": (
+                    self.silence_detector.get_silence_stats()
+                    if self.silence_detector
+                    else None
+                ),
+            },
         }

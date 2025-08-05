@@ -4,6 +4,8 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
+import gradio as gr
+
 from src.config.audio_config import (
     QUALITY_DISPLAY_AVERAGE,
     QUALITY_DISPLAY_HIGH,
@@ -220,9 +222,17 @@ def handle_audio_quality_change(selected_quality: str) -> Tuple[str, str]:
         is_compatible, warnings = validate_audio_quality_compatibility(selected_quality)
 
         if not is_compatible:
-            error_msg = f"{ERROR_PREFIX} Audio quality change failed - compatibility issues detected"
-            logger.error(error_msg)
-            return error_msg, get_current_audio_quality_info_html()
+            logger.warning(
+                "❌ Audio quality validation failed - compatibility issues detected"
+            )
+            gr.Warning(
+                "Audio quality change failed - compatibility issues detected ⚠️",
+                duration=5,
+            )
+            return (
+                "Audio quality change failed due to compatibility issues",
+                get_current_audio_quality_info_html(),
+            )
 
         # Update configuration
         if update_audio_quality_configuration(selected_quality):
@@ -240,14 +250,17 @@ def handle_audio_quality_change(selected_quality: str) -> Tuple[str, str]:
             )
             return success_msg, get_current_audio_quality_info_html()
         else:
-            error_msg = f"{ERROR_PREFIX} Failed to update audio quality configuration"
-            logger.error(error_msg)
-            return error_msg, get_current_audio_quality_info_html()
+            logger.warning("❌ Audio quality configuration update failed")
+            gr.Warning("Failed to update audio quality configuration ⚠️", duration=5)
+            return (
+                "Audio quality configuration update failed",
+                get_current_audio_quality_info_html(),
+            )
 
     except Exception as e:
-        error_msg = f"{ERROR_PREFIX} Audio quality change error: {str(e)}"
-        logger.error(error_msg)
-        return error_msg, get_current_audio_quality_info_html()
+        error_msg = f"System error during audio quality change: {str(e)}"
+        logger.error(f"❌ {error_msg}", exc_info=True)
+        raise gr.Error(error_msg, duration=5)
 
 
 def get_current_audio_quality_info_html() -> str:
@@ -280,4 +293,4 @@ def get_current_audio_quality() -> str:
         return info['quality']
     except Exception as e:
         logger.error(f"{ERROR_PREFIX} Error getting current audio quality: {e}")
-        return QUALITY_DISPLAY_HIGH  # Default fallback
+        return QUALITY_DISPLAY_AVERAGE  # Default fallback

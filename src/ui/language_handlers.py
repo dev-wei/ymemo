@@ -69,9 +69,8 @@ def handle_language_change(selected_language: str) -> Tuple[str, str]:
 
         # Validate the selected language
         if not selected_language:
-            error_msg = "No language selected"
-            logger.warning(f"⚠️ {error_msg}")
-            status_manager.set_warning(error_msg)
+            logger.warning("⚠️ No language selected")
+            gr.Warning("No language selected ⚠️", duration=3)
             return status_manager.get_status_message(), "Language selection required"
 
         # Get display name
@@ -82,11 +81,13 @@ def handle_language_change(selected_language: str) -> Tuple[str, str]:
         azure_code = get_language_code(selected_language, "azure")
 
         if not aws_code and not azure_code:
-            error_msg = (
-                f"Language '{selected_language}' is not supported by any provider"
+            logger.warning(
+                f"❌ Language '{selected_language}' is not supported by any provider"
             )
-            logger.error(f"❌ {error_msg}")
-            status_manager.set_error(Exception(error_msg), "Unsupported language")
+            gr.Warning(
+                f"Language '{selected_language}' is not supported by any provider ⚠️",
+                duration=5,
+            )
             return status_manager.get_status_message(), "Language not supported"
 
         # Check provider-specific support
@@ -117,10 +118,9 @@ def handle_language_change(selected_language: str) -> Tuple[str, str]:
         return status_manager.get_status_message(), confirmation_msg
 
     except Exception as e:
-        error_msg = f"Error changing language: {str(e)}"
-        logger.error(f"❌ {error_msg}")
-        status_manager.set_error(e, "Language change failed")
-        return status_manager.get_status_message(), "❌ Language change failed"
+        error_msg = f"System error changing language: {str(e)}"
+        logger.error(f"❌ {error_msg}", exc_info=True)
+        raise gr.Error(error_msg, duration=5)
 
 
 def get_current_language_info(selected_language: str) -> str:
@@ -191,8 +191,11 @@ def validate_language_for_provider(
         return True, f"{display_name} supported by {provider.upper()} ({language_code})"
 
     except Exception as e:
-        logger.error(f"❌ Error validating language {language_key} for {provider}: {e}")
-        return False, f"Validation error: {str(e)}"
+        error_msg = (
+            f"System error validating language {language_key} for {provider}: {str(e)}"
+        )
+        logger.error(f"❌ {error_msg}", exc_info=True)
+        raise gr.Error(error_msg, duration=5)
 
 
 def get_language_status_update(selected_language: str) -> str:

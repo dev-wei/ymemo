@@ -8,6 +8,7 @@ import gradio as gr
 from .interface_handlers import (
     conditional_update,
     get_current_duration_display,
+    update_button_states,
 )
 
 logger = logging.getLogger(__name__)
@@ -110,24 +111,39 @@ class UIUpdateManager:
     def __init__(self):
         """Initialize the UI update manager."""
 
-    def combined_update(self) -> tuple[Any, Any, str]:
-        """Update dialog and duration display.
+    def combined_update(self) -> tuple[Any, Any, str, Any, Any, Any]:
+        """Update dialog, duration display, and button states.
 
         Returns:
-            Tuple of (dialog_state_result, dialog_output_result, duration_display_result)
+            Tuple of (dialog_state_result, dialog_output_result, duration_display_result,
+                     start_btn_result, stop_btn_result, save_btn_result)
         """
         try:
             dialog_state_result, dialog_output_result = conditional_update()
             duration_display_result = get_current_duration_display()
+            start_btn_result, stop_btn_result, save_btn_result = update_button_states()
             return (
                 dialog_state_result,
                 dialog_output_result,
                 duration_display_result,
+                start_btn_result,
+                stop_btn_result,
+                save_btn_result,
             )
         except Exception as e:
             logger.error(f"Error in combined update: {e}")
             # Return safe defaults
-            return gr.skip(), gr.skip(), "00:00"
+            from .button_state_manager import button_state_manager
+
+            safe_updates = button_state_manager.get_safe_fallback_updates()
+            return (
+                gr.skip(),
+                gr.skip(),
+                "00:00",
+                safe_updates["start_btn"],
+                safe_updates["stop_btn"],
+                safe_updates["save_btn"],
+            )
 
 
 # Global instances for consistent state management
@@ -143,6 +159,6 @@ def update_dialog_state(
     return dialog_state_manager.update_dialog_state(current_messages, new_message)
 
 
-def combined_update() -> tuple[Any, Any, str]:
-    """Update dialog and duration display."""
+def combined_update() -> tuple[Any, Any, str, Any, Any, Any]:
+    """Update dialog, duration display, and button states."""
     return ui_update_manager.combined_update()

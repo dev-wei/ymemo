@@ -84,6 +84,11 @@ class AudioSystemConfig:
     partial_result_timeout: float = 2.0  # Seconds before treating partial as final
     confidence_threshold: float = 0.0  # Minimum confidence to show result
 
+    # Silence detection and auto-stop settings
+    silence_timeout_seconds: int = (
+        300  # Auto-stop recording after this many seconds of silence (0 = disabled)
+    )
+
     # Fallback providers
     fallback_providers: list = None
 
@@ -127,8 +132,8 @@ class AudioSystemConfig:
         sample_rate = QUALITY_SAMPLE_RATE_MAP.get(
             audio_quality,
             cls._safe_int(
-                os.getenv('AUDIO_SAMPLE_RATE', str(SAMPLE_RATE_HIGH)),
-                SAMPLE_RATE_HIGH,
+                os.getenv('AUDIO_SAMPLE_RATE', str(SAMPLE_RATE_AVERAGE)),
+                SAMPLE_RATE_AVERAGE,
             ),
         )
 
@@ -184,6 +189,9 @@ class AudioSystemConfig:
             ),
             confidence_threshold=cls._safe_float(
                 os.getenv('CONFIDENCE_THRESHOLD', '0.0'), 0.0
+            ),
+            silence_timeout_seconds=cls._safe_int(
+                os.getenv('SILENCE_TIMEOUT_SECONDS', '300'), 300
             ),
         )
 
@@ -443,6 +451,12 @@ class AudioSystemConfig:
                 f"Confidence threshold must be between 0.0 and 1.0, got {self.confidence_threshold}"
             )
 
+        # Validate silence detection settings
+        if self.silence_timeout_seconds < 0:
+            errors.append(
+                f"Silence timeout must be non-negative (0 disables feature), got {self.silence_timeout_seconds}"
+            )
+
         # Log warnings for potentially problematic configurations
         if self.sample_rate != 16000:
             logger.warning(
@@ -527,6 +541,13 @@ def get_config() -> AudioSystemConfig:
     logger.info(f"  - Max Latency: {config.max_latency_ms}ms")
     logger.info(f"  - Partial Results: {config.enable_partial_results}")
 
+    if config.silence_timeout_seconds > 0:
+        logger.info(
+            f"  - Silence Auto-Stop: ✅ ENABLED ({config.silence_timeout_seconds}s timeout)"
+        )
+    else:
+        logger.info("  - Silence Auto-Stop: ❌ DISABLED")
+
     logger.debug(f"Full configuration (sensitive values masked): {masked_config}")
 
     return config
@@ -567,6 +588,14 @@ def print_config_summary() -> None:
     print(f"  - Max Latency: {config.max_latency_ms} ms")
     print(f"  - Partial Results: {config.enable_partial_results}")
     print(f"  - Confidence Threshold: {config.confidence_threshold}")
+    print("")
+    print("Safety Settings:")
+    if config.silence_timeout_seconds > 0:
+        print(
+            f"  - Silence Auto-Stop: ENABLED ({config.silence_timeout_seconds}s timeout)"
+        )
+    else:
+        print("  - Silence Auto-Stop: DISABLED")
     print("=============================================")
 
 
@@ -654,7 +683,7 @@ def get_audio_quality_choices() -> list[str]:
 
 def get_default_audio_quality() -> str:
     """Get default audio quality setting."""
-    return QUALITY_DISPLAY_HIGH
+    return QUALITY_DISPLAY_AVERAGE
 
 
 def get_current_audio_quality_from_sample_rate(sample_rate: int) -> str:
