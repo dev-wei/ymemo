@@ -56,6 +56,10 @@ class AudioSessionManager:
             self.audio_processor.set_connection_health_callback(
                 self._on_connection_health_changed
             )
+            # Set up callback for silence-triggered auto-stop
+            self.audio_processor.set_silence_auto_stop_callback(
+                self._on_silence_auto_stop_requested
+            )
             logger.info(
                 "✅ SessionManager: AudioProcessor initialized successfully for reuse"
             )
@@ -93,6 +97,9 @@ class AudioSessionManager:
 
         # Connection health tracking
         self.transcription_connected = True
+
+        # Stop reason tracking for silence detection
+        self.last_stop_reason = None  # 'user', 'silence', 'error', etc.
 
     def add_transcription_callback(self, callback: Callable[[dict], None]) -> None:
         """Add a callback for transcription updates."""
@@ -306,6 +313,50 @@ class AudioSessionManager:
                     if self.is_recording():
                         status_manager.set_transcription_disconnected(message)
 
+    def _on_silence_auto_stop_requested(self) -> None:
+        """Handle silence-triggered auto-stop request from AudioProcessor."""
+        logger.warning(
+            "🔇 SessionManager: Silence auto-stop requested by AudioProcessor"
+        )
+
+        # Update UI status to reflect the auto-stop
+        from ..utils.status_manager import status_manager
+
+        # Schedule the actual stop with silence reason
+        if self._recording_active:
+            # Update UI status to show stopping state
+            status_manager.set_stopping()
+            logger.info(
+                "🔇 SessionManager: Updated UI status to STOPPING for silence auto-stop"
+            )
+
+            # Use a thread to call stop_recording with the silence reason
+            # This avoids blocking the audio processing thread
+            import threading
+
+            def stop_with_silence_reason():
+                try:
+                    self.stop_recording(reason="silence")
+                    # Update UI status to show stopped state
+                    status_manager.set_stopped()
+                    logger.info(
+                        "🔇 SessionManager: Updated UI status to STOPPED after silence auto-stop"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"❌ SessionManager: Error during silence auto-stop: {e}"
+                    )
+                    # Update UI to show error state
+                    status_manager.set_error(
+                        e, "Failed to stop recording due to silence timeout"
+                    )
+
+            stop_thread = threading.Thread(target=stop_with_silence_reason, daemon=True)
+            stop_thread.start()
+            logger.info(
+                "🔇 SessionManager: Initiated silence-triggered stop in background thread"
+            )
+
     def _run_audio_processor_async(self, device_index: int) -> None:
         """Run audio processor in background thread."""
         loop = asyncio.new_event_loop()
@@ -470,8 +521,11 @@ class AudioSessionManager:
                 self._recording_active = False
                 return False
 
-    def stop_recording(self) -> bool:
+    def stop_recording(self, reason: str = "user") -> bool:
         """Stop recording session.
+
+        Args:
+            reason: Reason for stopping ('user', 'silence', 'error', etc.)
 
         Returns:
             True if successfully stopped, False otherwise
@@ -481,7 +535,10 @@ class AudioSessionManager:
                 return False  # Not recording
 
             try:
-                logger.info("🛑 SessionManager: Initiating stop sequence")
+                logger.info(
+                    f"🛑 SessionManager: Initiating stop sequence (reason: {reason})"
+                )
+                self.last_stop_reason = reason
 
                 # First, signal the audio processor to stop
                 logger.info("🛑 SessionManager: Stopping AudioProcessor recording...")
@@ -649,7 +706,16 @@ class AudioSessionManager:
 
                 # Update legacy field for compatibility
                 self.session_end_time = current_time
-                logger.info("✅ SessionManager: Recording stopped successfully")
+                logger.info(
+                    f"✅ SessionManager: Recording stopped successfully (reason: {reason})"
+                )
+
+                # Log additional info for silence-triggered stops
+                if reason == "silence":
+                    logger.info(
+                        "🔇 SessionManager: Recording was automatically stopped due to prolonged silence"
+                    )
+
                 return True
 
             except Exception as e:
@@ -694,6 +760,7 @@ class AudioSessionManager:
                 "current_duration_seconds": self.get_current_duration_seconds(),  # Enhanced duration
                 "start_time": self.session_start_time,
                 "end_time": self.session_end_time,
+                "last_stop_reason": self.last_stop_reason,
             }
 
     def get_current_duration_seconds(self) -> float:
@@ -739,6 +806,7 @@ class AudioSessionManager:
             # Reset legacy fields
             self.session_start_time = None
             self.session_end_time = None
+            self.last_stop_reason = None
 
             logger.info("🔄 Duration tracking reset for new meeting")
 

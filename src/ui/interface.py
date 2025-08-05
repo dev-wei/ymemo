@@ -4,7 +4,10 @@ import logging
 
 import gradio as gr
 
-from src.config.audio_config import get_audio_quality_choices, get_default_audio_quality
+from src.config.audio_config import (
+    get_audio_quality_choices,
+    get_current_audio_quality_info,
+)
 from src.config.language_config import get_default_language, get_language_choices
 from src.config.provider_config import (
     get_current_provider_from_env,
@@ -120,7 +123,7 @@ def create_sidebar():
             audio_quality_dropdown = gr.Dropdown(
                 label=FORM_LABELS["audio_quality"],
                 choices=get_audio_quality_choices(),
-                value=get_default_audio_quality(),
+                value=get_current_audio_quality_info()['quality'],
                 interactive=True,
             )
             # Audio quality information display
@@ -509,7 +512,7 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
         # Register callback with session manager
         audio_session.add_transcription_callback(immediate_transcription_update)
 
-        # Timer for dialog updates only (not button updates)
+        # Timer for dialog, duration, and button state updates
         timer = gr.Timer(
             value=UI_DIMENSIONS["timer_interval"]
         )  # Check for updates every 500ms
@@ -564,13 +567,16 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
 
         # Combined update function moved to interface_dialog_handlers.py
 
-        # Timer for dialog, download button, and duration updates
+        # Timer for dialog, duration, and button state updates
         timer.tick(
             fn=combined_update,
             outputs=[
                 dialog_state,
                 dialog_output,
                 duration_field,
+                start_btn,
+                stop_btn,
+                save_meeting_btn,
             ],
         )
 

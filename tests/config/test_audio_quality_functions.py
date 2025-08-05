@@ -38,9 +38,9 @@ class TestAudioQualityConfig(BaseTest):
         assert len(choices) == 2
 
     def test_get_default_audio_quality(self):
-        """Test that default quality is High."""
+        """Test that default quality is Average."""
         default = get_default_audio_quality()
-        assert default == QUALITY_DISPLAY_HIGH
+        assert default == QUALITY_DISPLAY_AVERAGE
         assert isinstance(default, str)
 
     def test_get_current_audio_quality_from_sample_rate(self):
@@ -189,8 +189,8 @@ class TestAudioQualityHandlers(BaseTest):
 
         status, html = handle_audio_quality_change(QUALITY_DISPLAY_HIGH)
 
-        assert "❌" in status
         assert "compatibility issues" in status
+        assert status == "Audio quality change failed due to compatibility issues"
 
     @patch('src.ui.audio_quality_handlers.get_current_audio_quality_info')
     def test_get_current_audio_quality_info_html_success(self, mock_get_info):

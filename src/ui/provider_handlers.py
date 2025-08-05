@@ -240,15 +240,24 @@ def validate_provider_for_language(
         )
 
         if not is_compatible:
+            logger.warning(
+                f"❌ Provider {provider_display} doesn't support {language_key}"
+            )
+            gr.Warning(
+                f"{provider_display} doesn't support {language_key} ⚠️", duration=5
+            )
             return False, f"{provider_display} doesn't support {language_key}"
 
         return True, f"{provider_display} supports {language_key}"
 
     except ProviderNotAvailableError:
+        logger.warning(f"❌ Provider {provider_display} not available")
+        gr.Warning(f"Provider {provider_display} not available ⚠️", duration=5)
         return False, f"Provider {provider_display} not available"
     except Exception as e:
-        logger.error(f"❌ Error validating provider language compatibility: {e}")
-        return False, f"Validation error: {str(e)}"
+        error_msg = f"System error validating provider compatibility: {str(e)}"
+        logger.error(f"❌ {error_msg}", exc_info=True)
+        raise gr.Error(error_msg, duration=5)
 
 
 def get_provider_status_update(selected_provider_display: str) -> str:
