@@ -35,6 +35,7 @@ UI_TEXT = {
     "meeting_list_title": "### Meeting List",
     "live_dialog_title": "### Live Dialog",
     "audio_controls_title": "### Audio Controls",
+    "persona_title": "### Persona",
     "sidebar_settings_title": "### ⚙️ Settings",
     "sidebar_performance_title": "### 📊 Performance",
 }
@@ -72,6 +73,8 @@ FORM_LABELS = {
     "session_duration": "Session Duration",
     "audio_level": "Audio Level",
     "memory_usage": "Memory Usage",
+    "speaker_a_persona": "Speaker A Persona",
+    "speaker_b_persona": "Speaker B Persona",
 }
 
 # Duration formatting

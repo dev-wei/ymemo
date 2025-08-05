@@ -50,7 +50,7 @@ APP_CSS = """
         padding-right: 10px !important;
     }
     .control-panel {
-        height: 500px !important;
+        height: 700px !important;
         overflow-y: auto !important;
         padding-left: 10px !important;
     }
@@ -85,7 +85,7 @@ APP_CSS = """
             height: 750px !important;
         }
         .control-panel {
-            height: 400px !important;
+            height: 550px !important;
         }
 
         /* Mobile delete controls styling */
@@ -150,7 +150,7 @@ APP_CSS = """
             height: 350px !important;
         }
         .control-panel {
-            height: 350px !important;
+            height: 450px !important;
         }
 
         /* Ensure vertical stacking on very small screens */
@@ -177,6 +177,23 @@ APP_CSS = """
     /* Ensure proper box sizing */
     * {
         box-sizing: border-box !important;
+    }
+
+    /* Debugging CSS for persona section visibility */
+    .control-panel > .gradio-row:nth-child(2) {
+        border: 2px dashed #007acc !important;
+        background-color: rgba(0, 122, 204, 0.05) !important;
+        padding: 10px !important;
+        margin-top: 15px !important;
+        margin-bottom: 10px !important;
+    }
+
+    /* Highlight persona dropdowns */
+    .control-panel .gradio-group {
+        background-color: rgba(255, 193, 7, 0.1) !important;
+        border: 1px solid #ffc107 !important;
+        border-radius: 5px !important;
+        padding: 15px !important;
     }
 
     /* Additional mobile layout fixes */

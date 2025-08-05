@@ -52,7 +52,10 @@ from .meeting_handlers import (
 from .persona_handlers import (
     create_persona_from_id,
     delete_persona_by_id_input,
+    get_persona_choices,
+    handle_speaker_persona_change,
     load_persona_by_id,
+    refresh_persona_dropdowns,
     refresh_personas,
     submit_new_persona,
 )
@@ -280,57 +283,91 @@ def create_controls():
     """Create the audio controls panel."""
 
     with gr.Column(scale=2, elem_classes=["control-panel"]):
-        gr.Markdown(UI_TEXT["audio_controls_title"])
-
-        # Audio device selection
-        device_choices, initial_device_index = get_device_choices_and_default()
-
-        device_dropdown = gr.Dropdown(
-            label=FORM_LABELS["audio_device"],
-            choices=device_choices,
-            value=initial_device_index,
-            interactive=True,
-            allow_custom_value=False,  # Disable custom values to prevent invalid indices
-        )
-
-        # Device refresh button
-        refresh_btn = gr.Button(
-            BUTTON_TEXT["refresh_devices"], size="sm", variant="secondary"
-        )
-
-        # Recording status
-        status_text = gr.Textbox(
-            label=FORM_LABELS["status"],
-            value=status_manager.get_status_message(),
-            interactive=False,
-        )
-
-        # Control buttons - Initialize with proper states using ButtonStateManager
-        current_status = status_manager.current_status
-        logger.info(f"🔍 Current status: {current_status}")
-        button_configs = button_state_manager.get_button_configs(current_status)
-        logger.info(
-            f"🔍 Start button interactive: {button_configs['start_btn'].interactive}"
-        )
-
+        # Row 1: Audio Controls
         with gr.Row():
-            start_btn = gr.Button(
-                button_configs["start_btn"].text,
-                variant=button_configs["start_btn"].variant,
-                interactive=button_configs["start_btn"].interactive,
-            )
-            stop_btn = gr.Button(
-                button_configs["stop_btn"].text,
-                variant=button_configs["stop_btn"].variant,
-                interactive=button_configs["stop_btn"].interactive,
-            )
+            with gr.Column():
+                gr.Markdown(UI_TEXT["audio_controls_title"])
 
-        # Save meeting button
-        save_meeting_btn = gr.Button(
-            button_configs["save_btn"].text,
-            variant=button_configs["save_btn"].variant,
-            interactive=button_configs["save_btn"].interactive,
-        )
+                # Audio device selection
+                device_choices, initial_device_index = get_device_choices_and_default()
+
+                device_dropdown = gr.Dropdown(
+                    label=FORM_LABELS["audio_device"],
+                    choices=device_choices,
+                    value=initial_device_index,
+                    interactive=True,
+                    allow_custom_value=False,  # Disable custom values to prevent invalid indices
+                )
+
+                # Device refresh button
+                refresh_btn = gr.Button(
+                    BUTTON_TEXT["refresh_devices"], size="sm", variant="secondary"
+                )
+
+                # Recording status
+                status_text = gr.Textbox(
+                    label=FORM_LABELS["status"],
+                    value=status_manager.get_status_message(),
+                    interactive=False,
+                )
+
+                # Control buttons - Initialize with proper states using ButtonStateManager
+                current_status = status_manager.current_status
+                logger.info(f"🔍 Current status: {current_status}")
+                button_configs = button_state_manager.get_button_configs(current_status)
+                logger.info(
+                    f"🔍 Start button interactive: {button_configs['start_btn'].interactive}"
+                )
+
+                with gr.Row():
+                    start_btn = gr.Button(
+                        button_configs["start_btn"].text,
+                        variant=button_configs["start_btn"].variant,
+                        interactive=button_configs["start_btn"].interactive,
+                    )
+                    stop_btn = gr.Button(
+                        button_configs["stop_btn"].text,
+                        variant=button_configs["stop_btn"].variant,
+                        interactive=button_configs["stop_btn"].interactive,
+                    )
+
+                # Save meeting button
+                save_meeting_btn = gr.Button(
+                    button_configs["save_btn"].text,
+                    variant=button_configs["save_btn"].variant,
+                    interactive=button_configs["save_btn"].interactive,
+                )
+
+        # Row 2: Persona Controls
+        with gr.Row():
+            with gr.Column():
+                gr.Markdown(UI_TEXT["persona_title"])
+
+                # Get persona choices for both dropdowns
+                persona_choices = get_persona_choices()
+                default_value = (
+                    persona_choices[0][1] if persona_choices else ""
+                )  # Use first choice value
+
+                # Use a Group container to ensure proper display
+                with gr.Group():
+                    with gr.Row():
+                        speaker_a_persona = gr.Dropdown(
+                            label=FORM_LABELS["speaker_a_persona"],
+                            choices=persona_choices,
+                            value=default_value,
+                            interactive=True,
+                            show_label=True,
+                            container=True,
+                        )
+                        speaker_b_persona = gr.Dropdown(
+                            label=FORM_LABELS["speaker_b_persona"],
+                            choices=persona_choices,
+                            value=default_value,
+                            interactive=True,
+                            show_label=True,
+                            container=True,
+                        )
 
         return (
             device_dropdown,
@@ -339,6 +376,8 @@ def create_controls():
             start_btn,
             stop_btn,
             save_meeting_btn,
+            speaker_a_persona,
+            speaker_b_persona,
         )
 
 
@@ -413,6 +452,8 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
                     start_btn,
                     stop_btn,
                     save_meeting_btn,
+                    speaker_a_persona,
+                    speaker_b_persona,
                 ) = create_controls()
 
         with gr.Tab("Persona", id="persona_tab"):
@@ -547,6 +588,19 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             outputs=[status_text, sidebar_audio_quality_info],
         )
 
+        # Speaker persona selection handlers
+        speaker_a_persona.change(
+            fn=lambda persona_id: handle_speaker_persona_change(persona_id, "A"),
+            inputs=[speaker_a_persona],
+            outputs=[status_text],
+        )
+
+        speaker_b_persona.change(
+            fn=lambda persona_id: handle_speaker_persona_change(persona_id, "B"),
+            inputs=[speaker_b_persona],
+            outputs=[status_text],
+        )
+
         start_btn.click(
             fn=start_recording,
             inputs=[device_dropdown, dialog_state],
@@ -620,6 +674,10 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             # Clear the form after successful submission
             fn=lambda: ("", "", ""),
             outputs=[persona_id_field, persona_name, persona_description],
+        ).then(
+            # Refresh persona dropdowns
+            fn=refresh_persona_dropdowns,
+            outputs=[speaker_a_persona, speaker_b_persona],
         )
 
         # Persona deletion handler
@@ -631,6 +689,10 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
             # Clear the input field after operation
             fn=lambda: "",
             outputs=[persona_id_input],
+        ).then(
+            # Refresh persona dropdowns
+            fn=refresh_persona_dropdowns,
+            outputs=[speaker_a_persona, speaker_b_persona],
         )
 
         # Create new persona handler
@@ -655,12 +717,20 @@ def create_interface(theme_name: str = DEFAULT_THEME) -> gr.Blocks:
         refresh_personas_btn.click(
             fn=refresh_personas,
             outputs=[persona_list],
+        ).then(
+            # Refresh persona dropdowns
+            fn=refresh_persona_dropdowns,
+            outputs=[speaker_a_persona, speaker_b_persona],
         )
 
         # Load personas on interface start
         demo.load(
             fn=refresh_personas,
             outputs=[persona_list],
+        ).then(
+            # Initialize persona dropdowns on load
+            fn=refresh_persona_dropdowns,
+            outputs=[speaker_a_persona, speaker_b_persona],
         )
 
         # Note: Removed automatic button updates to prevent interference with clicks
